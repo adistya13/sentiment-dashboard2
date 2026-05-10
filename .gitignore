@@ -1,0 +1,27 @@
+.DS_Store
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# Streamlit/local runtime
+.streamlit/secrets.toml
+
+# App runtime state/logs
+auto_crawl_log.json
+crawler_state.json
+*.log
+
+# Notebook/IPython
+.ipynb_checkpoints/

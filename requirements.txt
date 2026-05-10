@@ -1,0 +1,15 @@
+streamlit
+streamlit-autorefresh
+pandas
+plotly
+joblib
+scikit-learn
+Sastrawi
+python-dotenv
+sqlalchemy
+wordcloud
+matplotlib
+openpyxl
+playwright
+pymysql
+numpy
