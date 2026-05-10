@@ -30,12 +30,12 @@ Project ini menggunakan beberapa tools dan library berikut:
 | scikit-learn | Library machine learning untuk model Naive Bayes dan TF-IDF. |
 | Joblib | Memuat file model `.pkl` dan vectorizer `.pkl`. |
 | Sastrawi | Stemming kata Bahasa Indonesia. |
-| SQLite | Database lokal untuk menyimpan data tweet. |
-| SQLAlchemy | Koneksi database yang digunakan oleh Pandas dan modul aplikasi. |
+| SQLite | Database lokal utama untuk menyimpan data tweet tanpa server tambahan. |
+| SQLAlchemy | Engine koneksi database yang digunakan oleh Pandas dan modul aplikasi. |
 | python-dotenv | Membaca konfigurasi rahasia dari file `.env`. |
 | OpenPyXL | Membaca dan menulis file Excel `.xlsx`. |
 | Playwright | Dependensi pendukung scraping/otomasi browser bila diperlukan. |
-| PyMySQL | Dependensi koneksi MySQL jika nanti database dipindahkan ke MySQL. |
+| PyMySQL | Dependensi opsional jika suatu saat database dipindahkan ke MySQL. |
 | Node.js dan npx | Menjalankan package crawler tweet. |
 | tweet-harvest | Tool crawling tweet yang dipanggil melalui `npx`. |
 | Git dan GitHub | Version control dan penyimpanan repository online. |
@@ -82,6 +82,44 @@ Mengatur koneksi dan operasi database SQLite. Fungsi penting di file ini:
 - `insert_tweets()` memasukkan data dari dataframe ke database.
 - `get_existing_tweet_ids()` mengecek data duplikat.
 - `get_latest_crawl_time()` mengambil waktu crawling terbaru.
+
+## Database
+
+Project ini menggunakan database SQL berbasis SQLite, yaitu file lokal:
+
+```text
+data_sentimen_komdigi.db
+```
+
+SQLite tetap termasuk database SQL, tetapi tidak membutuhkan server database terpisah. Karena itu project ini tidak perlu XAMPP, Apache, phpMyAdmin, atau MySQL untuk menjalankan versi saat ini.
+
+Koneksi database dibuat di `database.py`:
+
+```python
+DB_PATH = os.getenv("DB_PATH", "data_sentimen_komdigi.db")
+engine = create_engine(f"sqlite:///{DB_PATH}", echo=False)
+```
+
+Tabel utama yang digunakan adalah `tweets` dengan kolom:
+
+| Kolom | Fungsi |
+| --- | --- |
+| `id` | Primary key auto increment. |
+| `tweet_id` | ID unik tweet untuk mencegah duplikasi data. |
+| `text` | Isi teks tweet. |
+| `created_at` | Waktu tweet dibuat. |
+| `crawled_at` | Waktu tweet berhasil diambil oleh crawler. |
+| `crawl_type` | Jenis crawling, default `realtime`. |
+
+Alur database:
+
+1. `init_db()` membuat tabel `tweets` jika belum tersedia.
+2. `scraper_worker.py` mengambil tweet dan mengubahnya menjadi data siap simpan.
+3. `save_tweets()` menyimpan tweet baru ke SQLite.
+4. Data yang sudah ada dicek melalui `get_existing_tweet_ids()` agar tidak masuk dua kali.
+5. Halaman dashboard membaca data dari SQLite untuk preprocessing, prediksi sentimen, tabel, dan visualisasi.
+
+Jika ingin memakai MySQL/XAMPP di masa depan, bagian koneksi di `database.py` perlu diubah dari SQLite ke connection string MySQL. Namun untuk repository ini, konfigurasi defaultnya adalah SQLite lokal.
 
 ### `crawler.py`
 
