@@ -211,13 +211,19 @@ SCRAPE_TABS=LATEST,TOP
 DB_PATH=data_sentimen_komdigi.db
 ```
 
+Catatan timezone:
+
+- Tampilan waktu pada dashboard mengikuti timezone device/browser pengguna saat opsi **Ikuti timezone device** aktif.
+- Jika timezone device berhasil terdeteksi, aplikasi akan menyesuaikan tampilan ke WIB, WITA, WIT, atau timezone valid dari browser.
+- `APP_TIMEZONE` bukan timezone utama pengguna. Nilai ini digunakan sebagai fallback dan sebagai timezone sumber untuk data waktu yang tidak memiliki informasi timezone.
+
 Keterangan:
 
 - `TWITTER_AUTH_TOKEN`: token autentikasi Twitter/X untuk crawling.
 - `QUERY`: kata kunci pencarian tweet.
 - `SCRAPE_LIMIT`: jumlah maksimal tweet yang diambil per tab.
 - `RECENT_DAYS`: rentang hari tweet yang dianggap realtime.
-- `APP_TIMEZONE`: zona waktu utama aplikasi.
+- `APP_TIMEZONE`: fallback timezone aplikasi dan timezone sumber untuk data waktu yang tidak memiliki info timezone.
 - `SCRAPE_TABS`: tab pencarian yang digunakan, misalnya `LATEST`, `TOP`, atau keduanya.
 - `DB_PATH`: lokasi file database SQLite.
 
