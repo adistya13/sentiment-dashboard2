@@ -527,7 +527,8 @@ def _render_nrt_status_banner(sched_ok):
         dot = "#f59e0b"
         title = "⚠️ Crawler Service Belum Aktif"
         desc = (
-            f"Jalankan <code>python3 crawler.py</code> di terminal terpisah "
+            # f"Jalankan <code>python3 crawler.py</code> di terminal terpisah "
+            f"Jalankan <code>python crawler.py</code> di terminal terpisah "
             f"untuk mengaktifkan crawler otomatis setiap "
             f"<strong>{NRT_INTERVAL_MINUTES} menit</strong>."
         )
@@ -838,8 +839,20 @@ def show():
     col1, col2, col3, col4 = st.columns(4)
 
     MODE_CFG = {
-        "realtime": {
+        "captured": {
             "col": col1,
+            "key": "btn_captured",
+            "label": "📆  Tweet Hari Ini",
+            "title": "Tweet Hari Ini",
+            "icon": "📆",
+            "desc": "Tweet bertanggal asli <strong>hari ini</strong>",
+            "active_bg": "linear-gradient(135deg,#f0f9ff,#dbeafe)",
+            "active_border": "#0ea5e9",
+            "active_tc": "#0c4a6e",
+            "icon_bg": "#0284c7",
+        },
+        "realtime": {
+            "col": col2,
             "key": "btn_realtime",
             "label": "📡  Terkini (7 Hari)",
             "title": "Tweet Terkini",
@@ -851,7 +864,7 @@ def show():
             "icon_bg": "#16a34a",
         },
         "30days": {
-            "col": col2,
+            "col": col3,
             "key": "btn_30days",
             "label": "📅  30 Hari Terakhir",
             "title": "30 Hari Terakhir",
@@ -862,18 +875,18 @@ def show():
             "active_tc": "#1e3a8a",
             "icon_bg": "#3b6cf7",
         },
-        "captured": {
-            "col": col3,
-            "key": "btn_captured",
-            "label": "📆  Tweet Hari Ini",
-            "title": "Tweet Hari Ini",
-            "icon": "📆",
-            "desc": "Tweet bertanggal asli <strong>hari ini</strong>",
-            "active_bg": "linear-gradient(135deg,#f0f9ff,#dbeafe)",
-            "active_border": "#0ea5e9",
-            "active_tc": "#0c4a6e",
-            "icon_bg": "#0284c7",
-        },
+        # "captured": {
+        #     "col": col3,
+        #     "key": "btn_captured",
+        #     "label": "📆  Tweet Hari Ini",
+        #     "title": "Tweet Hari Ini",
+        #     "icon": "📆",
+        #     "desc": "Tweet bertanggal asli <strong>hari ini</strong>",
+        #     "active_bg": "linear-gradient(135deg,#f0f9ff,#dbeafe)",
+        #     "active_border": "#0ea5e9",
+        #     "active_tc": "#0c4a6e",
+        #     "icon_bg": "#0284c7",
+        # },
         "custom": {
             "col": col4,
             "key": "btn_custom",
@@ -1054,7 +1067,9 @@ def show():
                 elif sched_ok:
                     st.success("✅ Crawler aktif — data diperbarui otomatis")
                 else:
-                    st.info("ℹ️ Jalankan `python3 crawler.py` untuk mengaktifkan crawler")
+                    # st.info("ℹ️ Jalankan `python3 crawler.py` untuk mengaktifkan crawler")
+                    st.info("ℹ️ Jalankan `python crawler.py` untuk mengaktifkan crawler")
+
 
             with col_refresh:
                 previous_auto_refresh = st.session_state.get("auto_refresh_ui", False)
