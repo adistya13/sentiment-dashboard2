@@ -26,6 +26,15 @@ except Exception:
 
 init_db()
 
+# ── Auto-start background crawler scheduler ──────────────────────────────────
+# Dipanggil sekali saat app pertama dijalankan.
+# Scheduler berjalan sebagai daemon thread — tidak perlu terminal terpisah.
+try:
+    from crawler import ensure_scheduler_running
+    ensure_scheduler_running()
+except Exception as _e:
+    print(f"[app] Gagal memulai scheduler: {_e}")
+
 st.set_page_config(
     page_title="Dashboard Sentimen Twitter",
     layout="wide",
@@ -46,10 +55,8 @@ def _get_query_param(name):
         value = st.query_params.get(name)
     except Exception:
         value = None
-
     if isinstance(value, list):
         return value[0] if value else None
-
     return value
 
 
@@ -65,13 +72,9 @@ def _get_context_offset():
         offset = st.context.timezone_offset
     except Exception:
         return None
-
     if offset is None:
         return None
-
     try:
-        # st.context.timezone_offset follows JavaScript getTimezoneOffset:
-        # UTC+8 is -480. The app mapping uses UTC offset minutes: UTC+8 is 480.
         return str(-int(offset))
     except (TypeError, ValueError):
         return None
@@ -79,27 +82,25 @@ def _get_context_offset():
 
 def _sync_timezone_from_browser():
     browser_timezone = _get_context_timezone() or _get_query_param("browser_tz")
-    browser_offset = _get_context_offset() or _get_query_param("browser_offset")
-    mapped_timezone = (
+    browser_offset   = _get_context_offset()   or _get_query_param("browser_offset")
+    mapped_timezone  = (
         browser_timezone_to_choice(browser_timezone)
         or browser_offset_to_choice(browser_offset)
     )
 
     st.session_state.browser_timezone = browser_timezone
-    st.session_state.browser_offset = browser_offset
+    st.session_state.browser_offset   = browser_offset
 
     if st.session_state.get("follow_device_timezone", True):
         timezone_choice = mapped_timezone or get_default_timezone()
-
         if st.session_state.user_timezone != timezone_choice:
             st.session_state.user_timezone = timezone_choice
 
 
 _sync_timezone_from_browser()
 
-# Determine refresh interval berdasarkan aktivitas crawler
+
 def get_refresh_interval():
-    """Refresh lebih cepat jika ada data baru dari crawler"""
     try:
         latest_crawl = get_latest_crawl_time()
         if latest_crawl:
@@ -107,15 +108,15 @@ def get_refresh_interval():
             latest_time = parse_dt_with_source_tz(
                 [latest_crawl],
                 timezone_choice,
-                os.getenv("APP_TIMEZONE", "Asia/Makassar")
+                os.getenv("APP_TIMEZONE", "Asia/Jakarta")
             ).iloc[0]
             now = pd.Timestamp.now(tz=get_timezone_name(timezone_choice)).tz_localize(None)
             time_diff = (now - latest_time).total_seconds()
-            # Jika data baru < 5 menit, refresh setiap 30 detik, jika tidak setiap 60 detik
             return 30000 if time_diff < 300 else 60000
     except Exception:
         pass
     return 60000
+
 
 refresh_interval = get_refresh_interval()
 
@@ -126,7 +127,7 @@ st_autorefresh(
 
 
 def _check_crawler_alive():
-    from datetime import datetime, timedelta, timezone
+    from datetime import timedelta
     from crawler import NRT_INTERVAL_MINUTES, get_crawler_state
 
     threshold = timedelta(minutes=max((NRT_INTERVAL_MINUTES * 2) + 1, 3))
@@ -134,7 +135,6 @@ def _check_crawler_alive():
     def parse_dt(value):
         if not value:
             return None
-
         try:
             parsed = datetime.fromisoformat(value)
             if parsed.tzinfo is None:
@@ -147,9 +147,9 @@ def _check_crawler_alive():
     if not state:
         return False
 
-    updated_at = parse_dt(state.get("updated_at"))
+    updated_at   = parse_dt(state.get("updated_at"))
     heartbeat_at = parse_dt(state.get("heartbeat_at"))
-    now = datetime.now(timezone.utc)
+    now          = datetime.now(timezone.utc)
 
     if (
         state.get("is_running", False)
@@ -191,10 +191,6 @@ st.markdown("""
     --card: #ffffff;
 }
 
-/* =========================
-   GLOBAL STYLING
-========================= */
-
 * {
     font-family: 'Plus Jakarta Sans', sans-serif !important;
     box-sizing: border-box;
@@ -233,26 +229,75 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
     padding: 1.5rem 2rem !important;
 }
 
-/* =========================
-   SIDEBAR
-========================= */
-
 [data-testid="stSidebar"] {
-    background: var(--card) !important;
-    box-shadow: 2px 0 8px rgba(15,23,42,0.08) !important;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%) !important;
+    border-right: 1px solid #e2e8f0 !important;
 }
 
 [data-testid="stSidebar"] > div:first-child {
-    padding: 1.5rem 1.25rem !important;
+    padding: 1.1rem 0.9rem !important;
 }
 
 [data-testid="stSidebar"] * {
     color: var(--text) !important;
 }
 
-/* =========================
-   BUTTONS & NAVIGATION
-========================= */
+.sidebar-section-title {
+    font-size: 0.63rem;
+    font-weight: 800;
+    color: #94a3b8;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 1rem 0 0.5rem;
+    padding-left: 0.35rem;
+}
+
+.sidebar-card {
+    background: rgba(255,255,255,0.8);
+    backdrop-filter: blur(10px);
+    border: 1px solid #e2e8f0;
+    border-radius: 14px;
+    padding: 0.85rem 0.95rem;
+    margin-bottom: 0.9rem;
+    box-shadow: 0 2px 10px rgba(15,23,42,0.04);
+}
+
+[data-testid="stSidebar"] .stButton > button {
+    height: 46px !important;
+    border-radius: 14px !important;
+    font-size: 0.87rem !important;
+    font-weight: 700 !important;
+    border: 1px solid transparent !important;
+    background: transparent !important;
+    color: #475569 !important;
+    transition: all 0.18s ease !important;
+    padding-left: 1rem !important;
+    width: 100% !important;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: #eef2ff !important;
+    color: #3b6cf7 !important;
+    border-color: #c7d2fe !important;
+    transform: translateX(2px);
+}
+
+[data-testid="stSidebar"] .stButton > button[kind="primary"] {
+    background: linear-gradient(135deg,#3b6cf7,#5b7cfa) !important;
+    color: white !important;
+    border: none !important;
+    box-shadow: 0 6px 16px rgba(59,108,247,0.22) !important;
+}
+
+[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {
+    transform: translateX(2px);
+}
+
+[data-testid="stSidebar"] .stCaption {
+    font-size: 0.72rem !important;
+    line-height: 1.5 !important;
+    color: #64748b !important;
+}
 
 .stButton > button {
     background: var(--card) !important;
@@ -314,10 +359,6 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
     opacity: 1 !important;
 }
 
-/* =========================
-   HEADERS & TITLES
-========================= */
-
 .top-header {
     background: var(--card);
     padding: 1.5rem;
@@ -329,9 +370,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
     gap: 1rem;
 }
 
-.top-header * {
-    color: var(--text) !important;
-}
+.top-header * { color: var(--text) !important; }
 
 .page-title {
     font-size: 1.875rem !important;
@@ -341,13 +380,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
     line-height: 1.2;
 }
 
-h1, h2, h3, h4, h5, h6 {
-    color: var(--text) !important;
-}
-
-/* =========================
-   CARDS & CONTAINERS
-========================= */
+h1, h2, h3, h4, h5, h6 { color: var(--text) !important; }
 
 .card {
     background: var(--card);
@@ -379,10 +412,6 @@ h1, h2, h3, h4, h5, h6 {
     margin-top: 3px;
 }
 
-/* =========================
-   METRICS & PILLS
-========================= */
-
 [data-testid="stMetric"] {
     background: var(--card) !important;
     border: 1.5px solid var(--border) !important;
@@ -406,13 +435,7 @@ h1, h2, h3, h4, h5, h6 {
     font-size: 1.75rem !important;
 }
 
-/* =========================
-   TEXT & CONTENT
-========================= */
-
-.stMarkdown {
-    color: var(--text) !important;
-}
+.stMarkdown { color: var(--text) !important; }
 
 p:not([style]), li:not([style]) {
     color: var(--text-secondary) !important;
@@ -425,13 +448,8 @@ span:not([style]) {
 }
 
 .stMarkdown p:not([style]),
-.stMarkdown li:not([style]) {
-    color: var(--text-secondary) !important;
-}
-
-.stMarkdown span:not([style]) {
-    color: inherit !important;
-}
+.stMarkdown li:not([style]) { color: var(--text-secondary) !important; }
+.stMarkdown span:not([style]) { color: inherit !important; }
 
 .stButton > button p,
 .stButton > button span,
@@ -441,10 +459,6 @@ span:not([style]) {
     line-height: 1.25 !important;
 }
 
-/* =========================
-   EXPANDERS
-========================= */
-
 [data-testid="stExpander"] {
     background: var(--card) !important;
     border: 1.5px solid var(--border) !important;
@@ -453,9 +467,7 @@ span:not([style]) {
     overflow: hidden !important;
 }
 
-[data-testid="stExpander"] details {
-    border: 0 !important;
-}
+[data-testid="stExpander"] details { border: 0 !important; }
 
 [data-testid="stExpander"] summary {
     background: var(--card) !important;
@@ -463,23 +475,15 @@ span:not([style]) {
     padding: 0.75rem 1rem !important;
 }
 
-[data-testid="stExpander"] summary:hover {
-    background: #f8fafc !important;
-}
+[data-testid="stExpander"] summary:hover { background: #f8fafc !important; }
 
 [data-testid="stExpander"] summary *,
-[data-testid="stExpander"] [data-testid="stIconMaterial"] {
-    color: var(--text) !important;
-}
+[data-testid="stExpander"] [data-testid="stIconMaterial"] { color: var(--text) !important; }
 
 .stCaption, .stCaptionContainer, .stCaptionContainer * {
     color: var(--text-tertiary) !important;
     font-size: 0.8125rem !important;
 }
-
-/* =========================
-   DATA & TABLES
-========================= */
 
 [data-testid="stDataFrame"] {
     border-radius: 12px !important;
@@ -487,13 +491,7 @@ span:not([style]) {
     overflow: hidden !important;
 }
 
-[data-testid="stDataFrame"] * {
-    color: var(--text) !important;
-}
-
-/* =========================
-   ALERTS & WARNINGS
-========================= */
+[data-testid="stDataFrame"] * { color: var(--text) !important; }
 
 .stAlert {
     border-radius: 12px !important;
@@ -523,10 +521,6 @@ span:not([style]) {
     border-color: #bae6fd !important;
     color: #0c4a6e !important;
 }
-
-/* =========================
-   FORM ELEMENTS
-========================= */
 
 .stTextInput input,
 .stDateInput input,
@@ -563,9 +557,7 @@ span:not([style]) {
 
 [data-baseweb="select"] span,
 [data-baseweb="select"] div,
-[data-baseweb="input"] div {
-    color: var(--text) !important;
-}
+[data-baseweb="input"] div { color: var(--text) !important; }
 
 .stTextInput input:focus,
 .stSelectbox select:focus,
@@ -588,9 +580,7 @@ span:not([style]) {
 }
 
 [data-baseweb="menu"] *,
-[data-baseweb="calendar"] * {
-    color: var(--text) !important;
-}
+[data-baseweb="calendar"] * { color: var(--text) !important; }
 
 [data-baseweb="popover"] * {
     background-color: #ffffff !important;
@@ -675,10 +665,6 @@ span:not([style]) {
     -webkit-text-fill-color: #ffffff !important;
 }
 
-/* =========================
-   PILLS & CUSTOM ELEMENTS
-========================= */
-
 .pill-container {
     display: flex;
     gap: 1rem;
@@ -697,17 +683,9 @@ span:not([style]) {
     box-shadow: 0 2px 6px rgba(15,23,42,0.05);
 }
 
-/* =========================
-   LAYOUT FIX
-========================= */
+#MainMenu, footer, header { visibility: hidden !important; }
 
-#MainMenu, footer, header {
-    visibility: hidden !important;
-}
-
-[data-testid="stHeader"] {
-    background: transparent !important;
-}
+[data-testid="stHeader"] { background: transparent !important; }
 
 [data-testid="stDownloadButton"] button {
     background: var(--card) !important;
@@ -722,7 +700,6 @@ span:not([style]) {
     background: var(--blue-light) !important;
     border-color: var(--blue-primary) !important;
 }
-
 </style>
 """, unsafe_allow_html=True)
 
@@ -745,88 +722,109 @@ if (
 
 with st.sidebar:
 
+    # ── HEADER ──────────────────────────────────────────────────
     st.markdown("""
-    <div style="display:flex;align-items:center;gap:0.75rem;padding:0.5rem 0.5rem 1.5rem;">
-        <div style="width:38px;height:38px;background:linear-gradient(135deg,#3b6cf7,#6389f8);
-                    border-radius:10px;display:flex;align-items:center;justify-content:center;
-                    font-size:1.1rem;flex-shrink:0;color:white;">📊</div>
+    <div style="
+        display:flex;align-items:center;gap:0.85rem;
+        padding:0.4rem 0.4rem 1.2rem;
+    ">
+        <div style="
+            width:42px;height:42px;
+            background:linear-gradient(135deg,#3b6cf7,#6d8cff);
+            border-radius:14px;
+            display:flex;align-items:center;justify-content:center;
+            font-size:1.15rem;
+            box-shadow:0 8px 20px rgba(59,108,247,0.25);
+            flex-shrink:0;color:white;
+        ">📊</div>
         <div>
-            <div style="font-size:1rem;font-weight:800;color:#0f172a;line-height:1.2;">SentimenX</div>
-            <div style="font-size:0.7rem;color:#94a3b8;font-weight:500;">Twitter Analytics</div>
+            <div style="font-size:1.02rem;font-weight:800;color:#0f172a;line-height:1.1;">
+                SentimenX
+            </div>
+            <div style="font-size:0.72rem;color:#64748b;font-weight:600;margin-top:2px;">
+                Twitter Analytics Dashboard
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
-    sched_ok = st.session_state.get("_scheduler_started", False)
+    # ── STATUS CRAWLER ──────────────────────────────────────────
+    sched_ok       = st.session_state.get("_scheduler_started", False)
     sched_interval = st.session_state.get("_scheduler_interval", 0)
-
-    sched_color = "#16a34a" if sched_ok else "#f59e0b"
-
-    sched_label = (
+    sched_color    = "#16a34a" if sched_ok else "#3b6cf7"
+    sched_label    = (
         f"Aktif — diperbarui tiap {sched_interval} menit"
         if sched_ok
-        else "Nonaktif — jalankan: python3 crawler.py"
+        else "Standby — akan crawl otomatis setiap 5 menit"
     )
 
-    sched_dot = "●" if sched_ok else "○"
-
     st.markdown(f"""
-    <div style="background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;
-                padding:0.625rem 0.75rem;margin-bottom:1.25rem;">
-        <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:2px;">
-            <span style="color:{sched_color};font-size:0.9rem;">{sched_dot}</span>
-            <span style="font-size:0.75rem;font-weight:700;color:#334155;">Crawler Service</span>
+    <div class="sidebar-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+            <div>
+                <div style="font-size:0.72rem;font-weight:800;color:#0f172a;">
+                    Crawler Service
+                </div>
+                <div style="font-size:0.72rem;color:#64748b;margin-top:2px;">
+                    {sched_label}
+                </div>
+            </div>
+            <div style="
+                width:10px;height:10px;border-radius:50%;
+                background:{sched_color};
+                box-shadow:0 0 10px {sched_color};
+            "></div>
         </div>
-        <div style="font-size:0.7rem;color:#64748b;line-height:1.5;">{sched_label}</div>
     </div>
     """, unsafe_allow_html=True)
-    
-    # Tampilkan waktu update terakhir data
+
+    # ── UPDATE TERBARU ──────────────────────────────────────────
     try:
         latest_crawl = get_latest_crawl_time()
         if latest_crawl:
             crawl_dt = parse_dt_with_source_tz(
                 [latest_crawl],
                 st.session_state.user_timezone,
-                os.getenv("APP_TIMEZONE", "Asia/Makassar")
+                os.getenv("APP_TIMEZONE", "Asia/Jakarta")
             ).iloc[0]
-            tz_label = get_timezone_label(st.session_state.user_timezone)
+
+            tz_label    = get_timezone_label(st.session_state.user_timezone)
             update_date = crawl_dt.strftime("%d/%m/%Y")
             update_time = f"{crawl_dt.strftime('%H:%M:%S')} {tz_label}"
+
             st.markdown(f"""
-            <div style="background:#eef2ff;border:1.5px solid #c7d2fe;border-radius:10px;
-                        padding:0.625rem 0.75rem;margin-bottom:1.25rem;">
-                <div style="font-size:0.7rem;font-weight:700;color:#1e3a8a;margin-bottom:2px;">
-                    🔄 Update Terbaru</div>
-                <div style="font-size:0.7rem;color:#1e40af;line-height:1.5;">
-                    {update_date}<br/>{update_time}</div>
+            <div class="sidebar-card">
+                <div style="font-size:0.72rem;font-weight:800;color:#0f172a;">
+                    Update Terbaru
+                </div>
+                <div style="margin-top:0.35rem;font-size:0.76rem;color:#475569;line-height:1.7;">
+                    {update_date}<br/>
+                    <span style="font-weight:700;color:#3b6cf7;">{update_time}</span>
+                </div>
             </div>
             """, unsafe_allow_html=True)
     except Exception:
         pass
 
-    st.markdown("""
-    <div style="font-size:0.65rem;font-weight:700;color:#94a3b8;
-                letter-spacing:0.08em;text-transform:uppercase;
-                padding:0 0.5rem;margin-bottom:0.5rem;">MENU UTAMA</div>
-    """, unsafe_allow_html=True)
+    # ── MENU UTAMA ──────────────────────────────────────────────
+    st.markdown('<div class="sidebar-section-title">MENU UTAMA</div>', unsafe_allow_html=True)
 
     current_page = st.session_state.get("page", "crawling")
 
     nav_items = [
-        ("crawling", "🔄  Ambil Data Twitter"),
-        ("preprocessing", "🧹  Bersihkan Data"),
-        ("sentiment", "📈  Analisis Sentimen"),
+        ("crawling",      "🔄 Ambil Data Twitter"),
+        ("preprocessing", "🧹 Bersihkan Data"),
+        ("sentiment",     "📈 Analisis Sentimen"),
     ]
 
     for page_key, label in nav_items:
         is_active = current_page == page_key
-
+        # Tidak memakai width="stretch" agar kompatibel dengan semua versi Streamlit
         if st.button(
             label,
-            width="stretch",
             type="primary" if is_active else "secondary",
-            key=f"nav_{page_key}"
+            key=f"nav_{page_key}",
+            use_container_width=True,
         ):
             st.session_state.page = page_key
             st.session_state.scroll_to_top = True
@@ -834,12 +832,8 @@ with st.sidebar:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    # Timezone selector
-    st.markdown("""
-    <div style="font-size:0.65rem;font-weight:700;color:#94a3b8;
-                letter-spacing:0.08em;text-transform:uppercase;
-                padding:0 0.5rem;margin-bottom:0.5rem;">⏰ ZONA WAKTU</div>
-    """, unsafe_allow_html=True)
+    # ── TIMEZONE ────────────────────────────────────────────────
+    st.markdown('<div class="sidebar-section-title">⏰ ZONA WAKTU</div>', unsafe_allow_html=True)
 
     follow_device = st.toggle(
         "Ikuti timezone device",
@@ -848,128 +842,53 @@ with st.sidebar:
         help="Jika aktif, dashboard membaca zona waktu dari browser/device."
     )
 
-    if follow_device != st.session_state.follow_device_timezone:
-        st.session_state.follow_device_timezone = follow_device
-
-        if follow_device:
-            mapped_timezone = (
-                browser_timezone_to_choice(
-                    st.session_state.get("browser_timezone")
-                )
-                or browser_offset_to_choice(st.session_state.get("browser_offset"))
-            )
-            st.session_state.user_timezone = mapped_timezone or get_default_timezone()
-
-        st.rerun()
-
-    timezone_options = list(INDONESIA_TIMEZONES.keys())
-
-    if (
-        not st.session_state.follow_device_timezone
-        and st.session_state.user_timezone not in timezone_options
-    ):
-        st.session_state.user_timezone = get_default_timezone()
-
-    if st.session_state.follow_device_timezone:
-        raw_detected_tz = st.session_state.get("browser_timezone")
-        detected_offset = st.session_state.get("browser_offset")
-        detected_tz = raw_detected_tz or (
-            "Timezone dari offset browser" if detected_offset else "Belum terdeteksi"
-        )
-        mapped_timezone = (
-            browser_timezone_to_choice(raw_detected_tz)
-            or browser_offset_to_choice(detected_offset)
-        )
-        active_label = mapped_timezone or get_default_timezone()
-        st.session_state.user_timezone = active_label
-        try:
-            offset_minutes = int(detected_offset)
-            sign = "+" if offset_minutes >= 0 else "-"
-            abs_minutes = abs(offset_minutes)
-            offset_label = f"UTC{sign}{abs_minutes // 60:02d}:{abs_minutes % 60:02d}"
-        except (TypeError, ValueError):
-            offset_label = "offset belum terdeteksi"
-        st.caption(f"Device: {detected_tz} · {offset_label} · Aktif: {active_label}")
-    else:
-        selected_tz = st.selectbox(
-            "Pilih zona waktu Indonesia",
-            timezone_options,
-            index=timezone_options.index(st.session_state.user_timezone),
-            label_visibility="collapsed",
-            key="tz_selector"
-        )
-
-        if selected_tz != st.session_state.user_timezone:
-            st.session_state.user_timezone = selected_tz
-            st.rerun()
-
     active_tz_name = get_timezone_name(st.session_state.user_timezone)
-    active_now = pd.Timestamp.now(tz=active_tz_name)
-    active_clock = active_now.strftime("%d/%m/%Y %H:%M:%S")
-    st.markdown(
-        f"""
-        <div style="background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;
-                    padding:0.625rem 0.75rem;margin:0.6rem 0 1.25rem;
-                    font-family:'Plus Jakarta Sans',sans-serif;">
-            <div style="font-size:0.7rem;font-weight:800;color:#334155;margin-bottom:2px;">
-                Jam Aktif
-            </div>
-            <div style="font-size:0.82rem;font-weight:800;color:#0f172a;line-height:1.5;">
-                {active_clock}
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    if (
-        st.session_state.follow_device_timezone
-        and (
-            browser_timezone_to_choice(st.session_state.get("browser_timezone"))
-            or browser_offset_to_choice(st.session_state.get("browser_offset"))
-        ) is None
-        and st.session_state.get("browser_timezone")
-    ):
-        st.caption("Timezone device belum valid dari browser, memakai default aplikasi.")
-
-    if not st.session_state.follow_device_timezone and selected_tz != st.session_state.user_timezone:
-        st.session_state.user_timezone = selected_tz
-        st.rerun()
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    crawler_query = os.getenv(
-        "QUERY",
-        'komdigi (ongkir OR "gratis ongkir" OR "free ongkir") OR "pembatasan gratis ongkir" OR "gratis ongkir dibatasi"'
-    )
-
-    query_terms = [
-        term.strip().strip('"')
-        for term in crawler_query.split(" OR ")
-        if term.strip()
-    ]
-
-    query_html = "<br/>".join(
-        f"• {escape(term)}" for term in query_terms
-    ) or f"• {escape(crawler_query)}"
+    active_now     = pd.Timestamp.now(tz=active_tz_name)
+    active_clock   = active_now.strftime("%d/%m/%Y %H:%M:%S")
 
     st.markdown(f"""
-    <div style="background:#f0f4fb;border-radius:12px;padding:1rem;margin-top:auto;">
-        <div style="font-size:0.7rem;font-weight:700;color:#0f172a;text-transform:uppercase;
-                    letter-spacing:0.06em;margin-bottom:0.625rem;">🔍 Query Crawler Aktif</div>
-        <div style="font-size:0.78rem;color:#475569;line-height:1.9;">
+    <div class="sidebar-card">
+        <div style="font-size:0.72rem;font-weight:800;color:#0f172a;margin-bottom:0.35rem;">
+            Jam Aktif
+        </div>
+        <div style="font-size:0.88rem;font-weight:800;color:#3b6cf7;line-height:1.5;">
+            {active_clock}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── QUERY ────────────────────────────────────────────────────
+    crawler_query = os.getenv(
+        "QUERY",
+        'komdigi (ongkir OR "gratis ongkir" OR "free ongkir")'
+    )
+    query_html = escape(crawler_query)
+
+    st.markdown(f"""
+    <div class="sidebar-card">
+        <div style="font-size:0.72rem;font-weight:800;color:#0f172a;margin-bottom:0.55rem;">
+            Query Aktif
+        </div>
+        <div style="font-size:0.74rem;color:#475569;line-height:1.8;word-break:break-word;">
             {query_html}
         </div>
     </div>
     """, unsafe_allow_html=True)
 
+    # ── FOOTER ───────────────────────────────────────────────────
     st.markdown("""
-    <div style="font-size:0.68rem;color:#94a3b8;text-align:center;margin-top:1.5rem;
-                padding-top:1rem;border-top:1px solid #e2e8f0;line-height:1.6;">
-        Data bersumber dari X (Twitter)<br/>via tweet-harvest
+    <div style="
+        font-size:0.68rem;color:#94a3b8;text-align:center;
+        margin-top:1.5rem;padding-top:1rem;
+        border-top:1px solid #e2e8f0;line-height:1.6;
+    ">
+        Data bersumber dari X (Twitter)<br/>
+        via tweet-harvest
     </div>
     """, unsafe_allow_html=True)
 
 
+# ── PAGE ROUTING ─────────────────────────────────────────────────────────────
 from page_modules import crawling_page, preprocessing_page, sentiment_page
 
 if st.session_state.page == "crawling":
