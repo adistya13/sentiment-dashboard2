@@ -1,3 +1,17 @@
+"""
+preprocessing_page.py
+=====================
+Halaman Bersihkan Data — NLP Pipeline 6 Tahap.
+
+PIPELINE 6 TAHAP (selaras dengan sentiment_service.py):
+  1. Case Folding     — ubah semua huruf jadi lowercase
+  2. Cleaning         — hapus URL, mention, hashtag, angka, emoji, tanda baca
+  3. Normalisasi      — singkatan/slang → kata baku
+  4. Tokenizing       — pecah kalimat → list token
+  5. Stopword Removal — hapus kata umum; JAGA kata sentimen penting
+  6. Stemming         — bentuk dasar kata via Sastrawi ECS
+"""
+
 import streamlit as st
 import pandas as pd
 import os
@@ -78,69 +92,64 @@ def _sync_dynamic_period():
 
 # ═══════════════════════════════════════════════════════════
 #  PREPROCESSING PIPELINE — 6 TAHAP
+#  PENTING: Pipeline ini harus IDENTIK dengan sentiment_service.py
+#  agar token yang dihasilkan konsisten dengan training model.
 #
-#  Urutan tahap:
-#   1. Cleaning         — hapus noise (URL, mention, hashtag, angka,
-#                         tanda baca, emoji, karakter non-latin)
-#   2. Case Folding     — ubah semua huruf jadi huruf kecil (lowercase)
-#   3. Normalisasi      — ganti singkatan/slang → kata baku
-#   4. Tokenizing       — pecah kalimat menjadi list token/kata
-#   5. Stopword Removal — buang kata umum yang tidak bermakna
-#   6. Stemming         — bentuk dasar kata via Sastrawi
-#
-#  Catatan desain:
-#  • Case Folding dilakukan SETELAH cleaning awal supaya regex pendeteksi
-#    emoji/karakter khusus tetap bekerja dengan baik, lalu baru dilanjut
-#    ke langkah selanjutnya yang semuanya butuh lowercase.
-#  • Tokenizing menghasilkan list; untuk keperluan tabel & analisis kata
-#    hasil tokenizing dikembalikan sebagai string (join spasi) agar mudah
-#    disimpan dan diproses step berikutnya.
-#  • Normalisasi berjalan pada level token sehingga pencocokan kata tepat
-#    (tidak partial match di tengah kata).
+#  URUTAN:
+#    1. Case Folding     → lowercase dulu sebelum cleaning
+#    2. Cleaning         → hapus noise setelah lowercase
+#    3. Normalisasi      → singkatan/slang → kata baku
+#    4. Tokenizing       → split menjadi list token
+#    5. Stopword Removal → buang kata umum, jaga kata sentimen
+#    6. Stemming         → bentuk dasar via Sastrawi ECS
 # ═══════════════════════════════════════════════════════════
 
+KATA_SENTIMEN_PENTING = {
+    # Negasi
+    "tidak", "bukan", "jangan", "kurang", "belum", "tanpa",
+    # Positif
+    "keren", "bagus", "mantap", "setuju", "dukung", "mendukung",
+    "andal", "handal", "gercep", "bangga", "senang", "suka",
+    "baik", "benar", "tepat", "oke",
+    "sejahtera", "berkembang", "maju", "inovatif",
+    "tegas", "sigap", "tanggap", "adil", "bijak", "bermanfaat",
+    "untung", "berhasil", "sukses", "solusi", "manfaat",
+    "berguna", "membantu", "bantu", "pro", "lanjut",
+    "sangat", "banget", "sekali", "paling", "amat", "luar", "biasa",
+    # Negatif
+    "kecewa", "buruk", "jelek", "parah", "gagal", "hancur",
+    "rusak", "bohong", "tipu", "korupsi",
+    # Emosi
+    "marah", "sedih", "khawatir",
+}
+
+
 def _load_stopwords():
-    """
-    Load stopword dari file indonesian-stopwords-complete.txt.
-    Kata-kata negasi penting (tidak, bukan, jangan, kurang, belum)
-    dikeluarkan dari stopword agar tidak hilang saat filtering —
-    keberadaannya krusial untuk analisis sentimen.
-    """
     stopword_file = "indonesian-stopwords-complete.txt"
     base = set()
     try:
         with open(stopword_file, "r", encoding="utf-8") as f:
             base = set(f.read().splitlines())
-        # Pertahankan kata negasi — penting untuk sentimen
-        for kata in ["tidak", "bukan", "jangan", "kurang", "belum", "tanpa"]:
-            base.discard(kata)
     except FileNotFoundError:
-        # Fallback minimal jika file tidak ada
         base = {
             "yang", "dan", "di", "ke", "dari", "ini", "itu",
             "dengan", "untuk", "pada", "adalah", "oleh", "ada",
             "ya", "akan", "atau", "juga", "sama", "karena",
             "jika", "sudah", "telah",
         }
-    # Tambahan stopword domain-spesifik & informal
+    for kata in KATA_SENTIMEN_PENTING:
+        base.discard(kata)
     base.update({
         "rt", "amp", "https", "http", "co", "t",
         "wkwk", "wkwkwk", "haha", "hehe", "xixi",
         "yg", "dgn", "utk", "dr", "krn", "tp", "jd", "sdh",
-        "aja", "doang", "banget", "bgt", "nih", "sih", "dong", "deh",
-        "loh", "lah", "tuh", "dong", "kak", "gan",
+        "aja", "doang", "nih", "sih", "dong", "deh",
+        "loh", "lah", "tuh", "kak", "gan",
     })
     return base
 
 
 def _load_stemmer():
-    """
-    Load stemmer Sastrawi jika tersedia.
-    Sastrawi adalah library stemming Bahasa Indonesia berbasis algoritma
-    Enhanced Confix Stripping (ECS) yang mampu menghapus awalan dan akhiran
-    secara bertahap (berlari → lari, makanan → makan, dst).
-    Mengembalikan None jika Sastrawi tidak terinstall — stemming di-skip.
-    """
     try:
         from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
         return StemmerFactory().create_stemmer()
@@ -148,28 +157,54 @@ def _load_stemmer():
         return None
 
 
-# Kamus normalisasi: kata informal/singkatan → kata baku
-# Mencakup: singkatan SMS/chat, kata gaul, singkatan domain crawling
 NORMALISASI = {
     # Negasi
     "gk": "tidak", "ga": "tidak", "gak": "tidak",
     "nggak": "tidak", "ngga": "tidak", "tdk": "tidak",
-    "tak": "tidak", "enggak": "tidak",
-    # Kata ganti & preposisi
+    "tak": "tidak", "enggak": "tidak", "engga": "tidak",
+    "kagak": "tidak", "kaga": "tidak", "ndak": "tidak",
+    "gkk": "tidak", "ngak": "tidak",
+    # Kata ganti
     "yg": "yang", "dgn": "dengan", "utk": "untuk",
     "org": "orang", "krn": "karena", "dr": "dari",
     "sm": "sama", "pd": "pada", "dlm": "dalam",
-    # Verba & adjektiva
+    "bwt": "buat", "trm": "terima",
+    # Verba
     "tp": "tapi", "tpi": "tapi", "jd": "jadi",
     "sdh": "sudah", "blm": "belum", "emg": "memang",
     "emang": "memang", "gimana": "bagaimana",
-    "gitu": "begitu", "gini": "begini", "bgt": "banget",
-    "udah": "sudah", "udh": "sudah", "mau": "mau",
-    "bngt": "banget", "bener": "benar", "beneran": "benar",
-    "mantep": "mantap", "keren": "keren",
-    # Domain e-commerce & topik crawling
+    "gitu": "begitu", "gini": "begini",
+    "udah": "sudah", "udh": "sudah",
+    "mau": "mau",
+    # Intensitas
+    "bgt": "banget", "bngt": "banget", "bget": "banget", "bgtt": "banget",
+    # Positif informal
+    "bener": "benar", "beneran": "benar",
+    "mantep": "mantap", "mntap": "mantap",
+    "kece": "keren", "kece bgt": "keren banget",
+    "cucok": "cocok", "cucuk": "cocok",
+    "cakep": "bagus", "oke bgt": "oke banget",
+    "sip": "baik", "siipp": "baik",
+    "top": "terbaik", "topbgt": "terbaik banget",
+    "jos": "bagus", "josss": "bagus",
+    "goks": "luar biasa",
+    "setujuu": "setuju", "stuju": "setuju",
+    "dukung": "dukung",
+    "proud": "bangga",
+    "mantul": "mantap betul",
+    # Negatif informal
+    "ancur": "hancur", "ancrr": "hancur",
+    "parahh": "parah", "parahhh": "parah",
+    "gagall": "gagal",
+    "ngaco": "tidak benar",
+    "ngasal": "tidak benar",
+    "receh": "tidak penting",
+    "gaje": "tidak jelas",
+    "asal": "sembarangan",
+    # Domain
     "ongkir": "ongkos kirim",
     "freeongkir": "gratis ongkos kirim",
+    "gratisongkir": "gratis ongkos kirim",
     "free": "gratis",
     "ecommerce": "e commerce",
     "komdigi": "komdigi",
@@ -185,69 +220,51 @@ NORMALISASI = {
 }
 
 
-# ── Tahap 1: Cleaning ────────────────────────────────────────────────────────
-# Menghapus semua elemen yang bukan teks bermakna:
-# URL, mention (@user), hashtag (#), angka, tanda baca standar,
-# emoji & simbol unicode, dan karakter non-latin (arab, kanji, dll).
-# Teks masih bisa uppercase/mixed-case di tahap ini.
-def step1_cleaning(text: str) -> str:
-    text = str(text)
-    text = re.sub(r"http\S+|www\S+|https\S+", "", text)          # hapus URL
-    text = re.sub(r"@\w+", "", text)                               # hapus mention
-    text = re.sub(r"#\w+", "", text)                               # hapus hashtag (beserta kata)
-    text = re.sub(r"\d+", "", text)                                # hapus angka
-    # Hapus emoji & simbol unicode (range karakter di luar Basic Latin)
+# ── Tahap 1: Case Folding ───────────────────────────────────────────────────
+def step1_case_folding(text: str) -> str:
+    return str(text).lower()
+
+
+# ── Tahap 2: Cleaning ───────────────────────────────────────────────────────
+def step2_cleaning(text: str) -> str:
+    text = re.sub(r"http\S+|www\S+|https\S+", "", text)
+    text = re.sub(r"@\w+", "", text)
+    text = re.sub(r"#\w+", "", text)
+    text = re.sub(r"\d+", "", text)
     text = re.sub(
-        r"[\U00010000-\U0010ffff"           # supplementary planes (emoji berwarna)
-        r"\U0001F600-\U0001F64F"            # emoticons
-        r"\U0001F300-\U0001F5FF"            # symbols & pictographs
-        r"\U0001F680-\U0001F6FF"            # transport & map
-        r"\U0001F1E0-\U0001F1FF"            # flags
-        r"\u2600-\u26FF\u2700-\u27BF"       # misc symbols & dingbats
+        r"[\U00010000-\U0010ffff"
+        r"\U0001F600-\U0001F64F"
+        r"\U0001F300-\U0001F5FF"
+        r"\U0001F680-\U0001F6FF"
+        r"\U0001F1E0-\U0001F1FF"
+        r"\u2600-\u26FF\u2700-\u27BF"
         r"]+", "", text, flags=re.UNICODE
     )
-    text = text.translate(str.maketrans("", "", string.punctuation))  # hapus tanda baca
-    text = re.sub(r"[^a-zA-Z\s]", "", text)                           # hapus karakter non-latin
+    text = text.translate(str.maketrans("", "", string.punctuation))
+    text = re.sub(r"[^a-zA-Z\s]", "", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
-# ── Tahap 2: Case Folding ────────────────────────────────────────────────────
-# Mengubah seluruh teks menjadi huruf kecil (lowercase).
-# Dipisah dari cleaning agar jelas sebagai tahap tersendiri dalam pipeline.
-def step2_case_folding(text: str) -> str:
-    return text.lower()
-
-
-# ── Tahap 3: Normalisasi ─────────────────────────────────────────────────────
-# Mengganti kata tidak baku / singkatan / slang dengan kata baku.
-# Pencocokan dilakukan per-token (bukan substring) agar "dr" di tengah kata
-# tidak ikut diganti.
+# ── Tahap 3: Normalisasi ────────────────────────────────────────────────────
 def step3_normalization(text: str) -> str:
     return " ".join(NORMALISASI.get(word, word) for word in text.split())
 
 
-# ── Tahap 4: Tokenizing ──────────────────────────────────────────────────────
-# Memecah kalimat menjadi daftar token (kata).
-# Hasilnya dikembalikan sebagai list untuk proses berikutnya,
-# tapi juga disimpan sebagai string (join) untuk tampilan tabel.
+# ── Tahap 4: Tokenizing ─────────────────────────────────────────────────────
 def step4_tokenizing(text: str) -> list:
     return text.split()
 
 
-# ── Tahap 5: Stopword Removal ────────────────────────────────────────────────
-# Membuang kata-kata yang tidak bermakna dari daftar token.
-# Juga membuang token dengan panjang ≤ 2 karakter.
-# Kata negasi (tidak, bukan, jangan, dll) TIDAK dihapus.
+# ── Tahap 5: Stopword Removal ───────────────────────────────────────────────
 def step5_stopword_removal(tokens: list, stopwords: set) -> list:
-    return [w for w in tokens if w not in stopwords and len(w) > 2]
+    return [
+        w for w in tokens
+        if (w not in stopwords or w in KATA_SENTIMEN_PENTING) and len(w) > 2
+    ]
 
 
-# ── Tahap 6: Stemming ────────────────────────────────────────────────────────
-# Mengubah kata ke bentuk dasar menggunakan algoritma Enhanced Confix
-# Stripping (ECS) dari library Sastrawi.
-# Contoh: "berlari" → "lari", "makanan" → "makan", "pembatasan" → "batas"
-# Jika Sastrawi tidak tersedia, token dikembalikan apa adanya.
+# ── Tahap 6: Stemming ───────────────────────────────────────────────────────
 def step6_stemming(tokens: list, stemmer) -> list:
     if stemmer is None:
         return tokens
@@ -256,25 +273,32 @@ def step6_stemming(tokens: list, stemmer) -> list:
 
 def full_preprocessing(text: str, stopwords: set, stemmer):
     """
-    Menjalankan seluruh pipeline 6 tahap dan mengembalikan dict berisi
-    hasil di setiap tahap untuk keperluan tampilan tabel & debugging.
+    Jalankan 6 tahap preprocessing dan kembalikan dict hasil setiap tahap.
+
+    URUTAN TAHAP:
+      1. Case Folding     → lowercase
+      2. Cleaning         → hapus noise
+      3. Normalisasi      → normalisasi kata
+      4. Tokenizing       → split token
+      5. Stopword Removal → buang stopword
+      6. Stemming         → bentuk dasar
     """
-    s1_clean    = step1_cleaning(text)
-    s2_fold     = step2_case_folding(s1_clean)
-    s3_norm     = step3_normalization(s2_fold)
+    s1_fold     = step1_case_folding(text)
+    s2_clean    = step2_cleaning(s1_fold)
+    s3_norm     = step3_normalization(s2_clean)
     s4_tokens   = step4_tokenizing(s3_norm)
     s5_filtered = step5_stopword_removal(s4_tokens, stopwords)
     s6_stemmed  = step6_stemming(s5_filtered, stemmer)
 
     return {
-        "setelah_cleaning":      s1_clean,
-        "setelah_casefolding":   s2_fold,
-        "setelah_normalisasi":   s3_norm,
-        "setelah_tokenizing":    " | ".join(s4_tokens),     # tampilkan token dengan separator
-        "setelah_stopword":      " ".join(s5_filtered),
-        "clean_text":            " ".join(s6_stemmed),      # hasil akhir untuk analisis sentimen
-        "_tokens_raw":           s4_tokens,                 # list mentah (untuk statistik)
-        "_tokens_clean":         s6_stemmed,                # list bersih (untuk word freq)
+        "setelah_casefolding": s1_fold,
+        "setelah_cleaning":    s2_clean,
+        "setelah_normalisasi": s3_norm,
+        "setelah_tokenizing":  " | ".join(s4_tokens),
+        "setelah_stopword":    " ".join(s5_filtered),
+        "clean_text":          " ".join(s6_stemmed),
+        "_tokens_raw":         s4_tokens,
+        "_tokens_clean":       s6_stemmed,
     }
 
 
@@ -300,16 +324,6 @@ def _section_header(title, subtitle=""):
 def _gap(size="md"):
     heights = {"xs": "0.6rem", "sm": "1rem", "md": "1.45rem", "lg": "2rem"}
     st.markdown(f'<div style="height:{heights.get(size,"1.45rem")};"></div>', unsafe_allow_html=True)
-
-
-def _card_wrap(content_fn, *args, **kwargs):
-    """Wrapper card tanpa key — kompatibel semua versi Streamlit."""
-    st.markdown("""
-<div style="background:#ffffff;border:1.5px solid #e2e8f0;border-radius:14px;
-            padding:1.1rem 1.2rem 1rem;box-shadow:0 2px 6px rgba(15,23,42,0.05);">
-</div>
-""", unsafe_allow_html=True)
-    content_fn(*args, **kwargs)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -382,6 +396,19 @@ header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important;
     margin: 2px 2px 0 0;
     line-height: 1.6;
 }
+
+.fix-badge {
+    display: inline-block;
+    background: #fef9c3;
+    color: #854d0e;
+    border: 1px solid #fde68a;
+    border-radius: 6px;
+    padding: 2px 8px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    margin-left: 6px;
+    vertical-align: middle;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -416,7 +443,7 @@ def _render_page_header():
             Bersihkan Data</h2>
         <p style="font-size:0.8rem;color:#64748b;margin:0;line-height:1.5;">
             Preprocessing teks 6 tahap otomatis:
-            <strong style="color:#059669;">Cleaning → Case Folding → Normalisasi → Tokenizing → Stopword Removal → Stemming</strong>
+            <strong style="color:#059669;">Case Folding → Cleaning → Normalisasi → Tokenizing → Stopword Removal → Stemming</strong>
         </p>
     </div>
     <div style="
@@ -433,22 +460,32 @@ def _render_page_header():
 
 
 # ═══════════════════════════════════════════════════════════
-#  PIPELINE STEPS CARDS — 6 TAHAP
+#  PIPELINE STEPS CARDS
 # ═══════════════════════════════════════════════════════════
 
 def _render_pipeline_steps(stemmer_ok):
-    """
-    Menampilkan 6 kartu tahap preprocessing dalam 2 baris × 3 kolom.
-    Setiap kartu berisi nomor tahap, ikon, judul, deskripsi singkat,
-    dan daftar aksi yang dilakukan.
-    """
     steps = [
         {
             "num": "01", "anim": "pipe-1",
+            "icon": "🔡", "color": "#0284c7", "dark": "#0c4a6e",
+            "bg": "linear-gradient(135deg,#eff6ff,#dbeafe)", "border": "#bfdbfe",
+            "title": "Case Folding",
+            "desc": "Menyeragamkan semua huruf menjadi lowercase sebelum proses lainnya.",
+            "items": [
+                '"Gratis" → "gratis"',
+                '"ONGKIR" → "ongkir"',
+                '"KEREN" → "keren"',
+                "Seluruh karakter → huruf kecil",
+                "Dilakukan pertama agar cleaning konsisten",
+                "Basis untuk normalisasi & stopword",
+            ],
+        },
+        {
+            "num": "02", "anim": "pipe-2",
             "icon": "🧽", "color": "#3b6cf7", "dark": "#1e3a8a",
             "bg": "linear-gradient(135deg,#eef2ff,#e0e7ff)", "border": "#c7d2fe",
             "title": "Cleaning",
-            "desc": "Menghapus semua elemen noise yang tidak bermakna dari teks mentah.",
+            "desc": "Menghapus semua elemen noise yang tidak bermakna dari teks.",
             "items": [
                 "Hapus URL (http, https, www)",
                 "Hapus mention (@username)",
@@ -459,31 +496,18 @@ def _render_pipeline_steps(stemmer_ok):
             ],
         },
         {
-            "num": "02", "anim": "pipe-2",
-            "icon": "🔡", "color": "#0284c7", "dark": "#0c4a6e",
-            "bg": "linear-gradient(135deg,#eff6ff,#dbeafe)", "border": "#bfdbfe",
-            "title": "Case Folding",
-            "desc": "Menyeragamkan huruf menjadi lowercase agar tidak ada duplikat akibat perbedaan kapitalisasi.",
-            "items": [
-                "\"Gratis\" → \"gratis\"",
-                "\"ONGKIR\" → \"ongkir\"",
-                "\"Komdigi\" → \"komdigi\"",
-                "Seluruh karakter → huruf kecil",
-            ],
-        },
-        {
             "num": "03", "anim": "pipe-3",
             "icon": "🔄", "color": "#16a34a", "dark": "#14532d",
             "bg": "linear-gradient(135deg,#f0fdf4,#dcfce7)", "border": "#86efac",
-            "title": "Normalisasi",
-            "desc": "Mengubah kata tidak baku, singkatan, dan slang menjadi kata baku standar.",
+            "title": 'Normalisasi <span class="fix-badge">✦ Diperluas</span>',
+            "desc": "Mengubah kata tidak baku, singkatan, dan slang menjadi kata baku.",
             "items": [
-                "gk / ga / gak → tidak",
+                "gk/ga/gak/kagak → tidak",
                 "ongkir → ongkos kirim",
-                "bgt → banget",
-                "gimana → bagaimana",
+                "mantep → mantap",
+                "kece → keren",
+                "jos/josss → bagus",
                 "free → gratis",
-                "seller → penjual",
             ],
         },
         {
@@ -491,27 +515,29 @@ def _render_pipeline_steps(stemmer_ok):
             "icon": "✂️", "color": "#7c3aed", "dark": "#3b0764",
             "bg": "linear-gradient(135deg,#f5f3ff,#ede9fe)", "border": "#c4b5fd",
             "title": "Tokenizing",
-            "desc": "Memecah kalimat menjadi unit kata (token) yang dapat diproses secara individual.",
+            "desc": "Memecah kalimat menjadi unit kata (token) individual.",
             "items": [
                 "Pisahkan berdasarkan spasi",
-                "\"gratis ongkos kirim\" → [gratis, ongkos, kirim]",
+                '"keren banget" → [keren, banget]',
                 "Setiap token diproses mandiri",
                 "Hasil: daftar kata terpisah",
+                "Input untuk stopword removal",
+                "Ditampilkan sebagai chip per token",
             ],
         },
         {
             "num": "05", "anim": "pipe-5",
             "icon": "🚫", "color": "#ea580c", "dark": "#7c2d12",
             "bg": "linear-gradient(135deg,#fff7ed,#ffedd5)", "border": "#fed7aa",
-            "title": "Stopword Removal",
-            "desc": "Membuang kata-kata umum yang tidak berkontribusi pada makna atau sentimen teks.",
+            "title": 'Stopword Removal <span class="fix-badge">✦ Diperbaiki</span>',
+            "desc": "Membuang kata umum; kata sentimen penting DIJAGA.",
             "items": [
-                "Hapus kata umum (dan, di, ke, dari…)",
-                "Hapus kata < 3 karakter",
-                "PERTAHANKAN: tidak, bukan, jangan",
-                "PERTAHANKAN: belum, kurang, tanpa",
-                f"Sumber: indonesian-stopwords-complete.txt",
-                "Kata negasi dijaga untuk sentimen",
+                "Hapus kata umum (dan, di, ke...)",
+                "Hapus token < 3 karakter",
+                "JAGA negasi: tidak, bukan, jangan",
+                "JAGA positif: keren, bagus, mantap",
+                "JAGA evaluatif: setuju, dukung, bijak",
+                "JAGA intensitas: banget, sangat, sekali",
             ],
         },
         {
@@ -519,26 +545,24 @@ def _render_pipeline_steps(stemmer_ok):
             "icon": "🌱", "color": "#ca8a04", "dark": "#713f12",
             "bg": "linear-gradient(135deg,#fefce8,#fef9c3)", "border": "#fde68a",
             "title": "Stemming",
-            "desc": "Mengubah kata ke bentuk dasarnya menggunakan algoritma Enhanced Confix Stripping (ECS) Sastrawi.",
+            "desc": "Mengubah kata ke bentuk dasar via ECS Sastrawi.",
             "items": [
                 "berlari → lari",
                 "makanan → makan",
                 "pembatasan → batas",
                 "pengiriman → kirim",
-                f"Status: {'✅ Sastrawi aktif' if stemmer_ok else '⚠️ Sastrawi tidak terinstall — skip'}",
+                f"Status: {'✅ Sastrawi aktif' if stemmer_ok else '⚠️ Sastrawi tidak tersedia'}",
                 "Algoritma: Enhanced Confix Stripping",
             ],
         },
     ]
 
-    # Baris pertama: tahap 1–3
     row1 = st.columns(3, gap="medium")
     for col, step in zip(row1, steps[:3]):
         _render_step_card(col, step)
 
     _gap("sm")
 
-    # Baris kedua: tahap 4–6
     row2 = st.columns(3, gap="medium")
     for col, step in zip(row2, steps[3:]):
         _render_step_card(col, step)
@@ -589,18 +613,18 @@ def _render_step_card(col, step):
 
 
 # ═══════════════════════════════════════════════════════════
-#  FLOW ARROW — pipeline visual
+#  FLOW ARROW
 # ═══════════════════════════════════════════════════════════
 
 def _render_flow_arrow():
     nodes = [
-        ("📄 Teks Asli",   "#94a3b8", "#f8fafc",  "#e2e8f0"),
-        ("① Cleaning",     "#3b6cf7", "#eef2ff",  "#c7d2fe"),
-        ("② Case Folding", "#0284c7", "#eff6ff",  "#bfdbfe"),
-        ("③ Normalisasi",  "#16a34a", "#f0fdf4",  "#86efac"),
-        ("④ Tokenizing",   "#7c3aed", "#f5f3ff",  "#c4b5fd"),
-        ("⑤ Stopword",     "#ea580c", "#fff7ed",  "#fed7aa"),
-        ("⑥ Stemming",     "#ca8a04", "#fefce8",  "#fde68a"),
+        ("📄 Teks Asli",    "#94a3b8", "#f8fafc",  "#e2e8f0"),
+        ("① Case Folding",  "#0284c7", "#eff6ff",  "#bfdbfe"),
+        ("② Cleaning",      "#3b6cf7", "#eef2ff",  "#c7d2fe"),
+        ("③ Normalisasi",   "#16a34a", "#f0fdf4",  "#86efac"),
+        ("④ Tokenizing",    "#7c3aed", "#f5f3ff",  "#c4b5fd"),
+        ("⑤ Stopword",      "#ea580c", "#fff7ed",  "#fed7aa"),
+        ("⑥ Stemming",      "#ca8a04", "#fefce8",  "#fde68a"),
         ("✅ Teks Bersih",  "#0f172a", "#0f172a",  "#334155"),
     ]
 
@@ -637,13 +661,6 @@ def _render_flow_arrow():
 # ═══════════════════════════════════════════════════════════
 
 def _render_stat_pills(total_raw, total_clean, avg_tokens_before, avg_tokens_after, removed):
-    """
-    Menampilkan 4 kartu ringkasan hasil preprocessing:
-    1. Total tweet yang masuk pipeline
-    2. Tweet yang lolos semua tahap (clean_text tidak kosong)
-    3. Tweet yang dibuang (clean_text kosong setelah semua tahap)
-    4. Rata-rata jumlah token sebelum vs sesudah stopword removal
-    """
     c1, c2, c3, c4 = st.columns(4, gap="medium")
 
     cards = [
@@ -685,7 +702,7 @@ def _render_stat_pills(total_raw, total_clean, avg_tokens_before, avg_tokens_aft
 
 
 # ═══════════════════════════════════════════════════════════
-#  LIVE EXAMPLE — contoh hasil tiap tahap
+#  LIVE EXAMPLE
 # ═══════════════════════════════════════════════════════════
 
 def _render_live_example(df_c):
@@ -699,21 +716,21 @@ def _render_live_example(df_c):
         "Contoh tweet acak dari dataset — refresh halaman untuk contoh berbeda"
     )
 
+    # Urutan tampilan sesuai pipeline: CF → Clean → Norm → Token → Stop → Stem
     steps_ex = [
-        ("📄 Teks Asli",          "text_asli",           "#0f172a", "#f8fafc",  "#e2e8f0", False),
-        ("① Setelah Cleaning",    "setelah_cleaning",    "#1e3a8a", "#eef2ff",  "#c7d2fe", False),
-        ("② Setelah Case Folding","setelah_casefolding", "#0c4a6e", "#eff6ff",  "#bfdbfe", False),
-        ("③ Setelah Normalisasi", "setelah_normalisasi", "#14532d", "#f0fdf4",  "#86efac", False),
-        ("④ Setelah Tokenizing",  "setelah_tokenizing",  "#3b0764", "#f5f3ff",  "#c4b5fd", True),  # tampilkan sebagai chip
-        ("⑤ Setelah Stopword",   "setelah_stopword",    "#7c2d12", "#fff7ed",  "#fed7aa", False),
-        ("⑥ Hasil Akhir (Stem)", "clean_text",           "#713f12", "#fefce8",  "#fde68a", False),
+        ("📄 Teks Asli",            "text_asli",           "#0f172a", "#f8fafc",  "#e2e8f0", False),
+        ("① Setelah Case Folding",  "setelah_casefolding", "#0c4a6e", "#eff6ff",  "#bfdbfe", False),
+        ("② Setelah Cleaning",      "setelah_cleaning",    "#1e3a8a", "#eef2ff",  "#c7d2fe", False),
+        ("③ Setelah Normalisasi",   "setelah_normalisasi", "#14532d", "#f0fdf4",  "#86efac", False),
+        ("④ Setelah Tokenizing",    "setelah_tokenizing",  "#3b0764", "#f5f3ff",  "#c4b5fd", True),
+        ("⑤ Setelah Stopword",     "setelah_stopword",    "#7c2d12", "#fff7ed",  "#fed7aa", False),
+        ("⑥ Hasil Akhir (Stem)",   "clean_text",           "#713f12", "#fefce8",  "#fde68a", False),
     ]
 
     for label, col_key, text_color, bg, border, is_token in steps_ex:
         raw = sample.get(col_key, "-")
         text_display = str(raw) if raw and str(raw).strip() else "—"
 
-        # Untuk tokenizing, tampilkan sebagai chip/badge per kata
         if is_token and text_display != "—":
             words = text_display.split(" | ")
             chips = "".join(
@@ -721,8 +738,7 @@ def _render_live_example(df_c):
                 for w in words if w.strip()
             )
             content_html = f'<div style="line-height:2;">{chips}</div>'
-            word_count = len(words)
-            char_info  = f"{word_count} token"
+            char_info  = f"{len(words)} token"
         else:
             content_html = (
                 f'<div style="font-size:0.82rem;color:{text_color};'
@@ -752,27 +768,20 @@ def _render_live_example(df_c):
 # ═══════════════════════════════════════════════════════════
 
 def _render_length_comparison_chart(df, df_c):
-    """
-    Grafik batang: rata-rata jumlah karakter per tweet di setiap tahap.
-    Catatan: jumlah karakter bisa naik di tahap Normalisasi karena
-    singkatan diekspansi (ongkir 6 kar → ongkos kirim 12 kar) — ini NORMAL.
-    Turun signifikan terjadi di tahap Stopword dan Stemming.
-    """
     _section_header(
         "📐 Perbandingan Panjang Teks per Tahap",
-        "Rata-rata jumlah karakter per tweet di setiap tahap preprocessing · Naik di normalisasi adalah normal (ekspansi singkatan)"
+        "Rata-rata karakter per tweet di tiap tahap · Naik di normalisasi adalah normal (ekspansi singkatan)"
     )
 
     stages = [
-        "Teks Asli", "① Cleaning", "② Case Folding",
+        "Teks Asli", "① Case Folding", "② Cleaning",
         "③ Normalisasi", "④ Tokenizing", "⑤ Stopword", "⑥ Stemming"
     ]
     avgs = [
         df["text"].astype(str).str.len().mean(),
-        df_c["setelah_cleaning"].astype(str).str.len().mean(),
         df_c["setelah_casefolding"].astype(str).str.len().mean(),
+        df_c["setelah_cleaning"].astype(str).str.len().mean(),
         df_c["setelah_normalisasi"].astype(str).str.len().mean(),
-        # tokenizing: hitung panjang tanpa separator " | "
         df_c["setelah_tokenizing"].apply(
             lambda x: len(" ".join(str(x).split(" | ")))
         ).mean(),
@@ -780,8 +789,7 @@ def _render_length_comparison_chart(df, df_c):
         df_c["clean_text"].astype(str).str.len().mean(),
     ]
     avgs = [round(a, 1) for a in avgs]
-
-    colors = ["#94a3b8", "#3b6cf7", "#0284c7", "#16a34a", "#7c3aed", "#ea580c", "#ca8a04"]
+    colors = ["#94a3b8", "#0284c7", "#3b6cf7", "#16a34a", "#7c3aed", "#ea580c", "#ca8a04"]
 
     fig = go.Figure(data=[
         go.Bar(
@@ -825,7 +833,6 @@ def _render_top_words_chart(df_c):
         f"Dari {len(df_c):,} tweet yang sudah bersih (hasil akhir tahap 6) — Top 20 kata"
     )
 
-    # Gunakan _tokens_clean (list) jika tersedia, fallback ke clean_text string
     if "_tokens_clean" in df_c.columns:
         all_words = [w for tokens in df_c["_tokens_clean"] for w in (tokens if isinstance(tokens, list) else [])]
     else:
@@ -864,7 +871,6 @@ def _render_top_words_chart(df_c):
         showlegend=False,
     )
 
-    # ── Tanpa key — kompatibel semua versi Streamlit ──
     st.markdown("""
 <div style="background:#ffffff;border:1.5px solid #e2e8f0;border-radius:14px;
             padding:1rem 1.2rem 0.5rem;box-shadow:0 2px 6px rgba(15,23,42,0.05);">
@@ -906,7 +912,6 @@ def show():
         st.session_state.analysis_mode, ("#3b6cf7", "📊")
     )
 
-    # ── Active Period Banner ──────────────────────────────────
     st.markdown(
         f'<div style="background:#fff;border-left:4px solid {mode_color};'
         f'border-top:1.5px solid #e2e8f0;border-right:1.5px solid #e2e8f0;'
@@ -935,7 +940,7 @@ def show():
     _render_flow_arrow()
     _gap("md")
 
-    # ── Load data dari DB ─────────────────────────────────────
+    # ── Load data ─────────────────────────────────────────────
     try:
         df_all = pd.read_sql("SELECT * FROM tweets ORDER BY created_at DESC", engine)
         if df_all.empty:
@@ -966,7 +971,6 @@ def show():
         f"{start_date}_{end_date}_{total_tweets_in_db}_{latest_crawl_marker}"
     )
 
-    # Hapus cache lama dari session state
     for old_key in list(st.session_state.keys()):
         if old_key.startswith("pp6_") and old_key != cache_key:
             del st.session_state[old_key]
@@ -981,35 +985,31 @@ def show():
             results = []
             for _, row in df.iterrows():
                 r = full_preprocessing(row["text"], stopwords, stemmer)
-                r["tweet_id"]  = row.get("tweet_id", "")
-                r["text_asli"] = row["text"]
+                r["tweet_id"]   = row.get("tweet_id", "")
+                r["text_asli"]  = row["text"]
                 r["created_at"] = row["created_at"]
                 r["crawled_at"] = row.get("crawled_at")
                 results.append(r)
 
             df_c = pd.DataFrame(results)
-            # Buang tweet yang clean_text-nya kosong setelah semua tahap
             df_c = df_c[df_c["clean_text"].str.strip().str.len() > 0].copy()
 
-            st.session_state[cache_key]                   = df_c
+            st.session_state[cache_key]                  = df_c
             st.session_state[cache_key + "_stemmer_ok"]  = stemmer is not None
             st.session_state["_pp_last_data_marker"]     = data_marker
 
     df_c       = st.session_state[cache_key]
     stemmer_ok = st.session_state.get(cache_key + "_stemmer_ok", False)
 
-    # ── Hitung statistik ringkasan ────────────────────────────
-    # Token sebelum stopword = jumlah kata di tahap tokenizing
+    # ── Statistik ─────────────────────────────────────────────
     avg_tok_before = df_c["setelah_tokenizing"].apply(
         lambda x: len(str(x).split(" | ")) if str(x).strip() else 0
     ).mean()
-    # Token sesudah stopword = jumlah kata di clean_text
     avg_tok_after = df_c["clean_text"].apply(
         lambda x: len(str(x).split()) if str(x).strip() else 0
     ).mean()
     removed = len(df) - len(df_c)
 
-    # ── Ringkasan ─────────────────────────────────────────────
     _section_header(
         "📌 Ringkasan Hasil Preprocessing",
         f"Berdasarkan tanggal asli tweet · {filter_label}"
@@ -1018,11 +1018,10 @@ def show():
     _render_stat_pills(len(df), len(df_c), avg_tok_before, avg_tok_after, removed)
     _gap("lg")
 
-    # ── Live example ──────────────────────────────────────────
     _render_live_example(df_c)
     _gap("lg")
 
-    # ── Tabel perbandingan tahap ──────────────────────────────
+    # ── Tabel ─────────────────────────────────────────────────
     _section_header(
         "📋 Tabel Perbandingan Teks per Tahap",
         f"{len(df_c):,} tweet · {filter_label} — scroll horizontal untuk lihat semua kolom"
@@ -1032,11 +1031,12 @@ def show():
         df_c = df_c.copy()
         df_c["crawled_at"] = pd.NaT
 
+    # Kolom ditampilkan sesuai urutan pipeline: CF → Clean → Norm → Token → Stop → Stem
     disp = df_c[[
         "tweet_id", "created_at", "crawled_at",
         "text_asli",
-        "setelah_cleaning",
         "setelah_casefolding",
+        "setelah_cleaning",
         "setelah_normalisasi",
         "setelah_tokenizing",
         "setelah_stopword",
@@ -1046,8 +1046,8 @@ def show():
     disp.columns = [
         "ID Tweet", "Tanggal Tweet", "Masuk Database",
         "Teks Asli",
-        "① Cleaning",
-        "② Case Folding",
+        "① Case Folding",
+        "② Cleaning",
         "③ Normalisasi",
         "④ Tokenizing",
         "⑤ Stopword",
@@ -1063,36 +1063,34 @@ def show():
         min_width=2200,
         nowrap=["ID Tweet", "Tanggal Tweet", "Masuk Database"],
         wide_columns=[
-            "Teks Asli", "① Cleaning", "② Case Folding",
+            "Teks Asli", "① Case Folding", "② Cleaning",
             "③ Normalisasi", "④ Tokenizing", "⑤ Stopword", "⑥ Hasil Akhir",
         ],
         column_widths={
-            "ID Tweet":        "155px",
-            "Tanggal Tweet":   "165px",
-            "Masuk Database":  "165px",
-            "Teks Asli":       "280px",
-            "① Cleaning":      "240px",
-            "② Case Folding":  "220px",
-            "③ Normalisasi":   "220px",
-            "④ Tokenizing":    "240px",
-            "⑤ Stopword":      "220px",
-            "⑥ Hasil Akhir":   "220px",
+            "ID Tweet":         "155px",
+            "Tanggal Tweet":    "165px",
+            "Masuk Database":   "165px",
+            "Teks Asli":        "280px",
+            "① Case Folding":   "220px",
+            "② Cleaning":       "240px",
+            "③ Normalisasi":    "220px",
+            "④ Tokenizing":     "240px",
+            "⑤ Stopword":       "220px",
+            "⑥ Hasil Akhir":    "220px",
         },
     )
     _gap("lg")
 
-    # ── Chart panjang teks ────────────────────────────────────
     _render_length_comparison_chart(df, df_c)
     _gap("lg")
 
-    # ── Top words ─────────────────────────────────────────────
     _render_top_words_chart(df_c)
     _gap("lg")
 
-    # ── Simpan ke session state untuk halaman sentimen ────────
+    # ── Simpan ke session state ───────────────────────────────
     st.session_state["preprocessed_df"] = df_c
 
-    # ── Download buttons ──────────────────────────────────────
+    # ── Download ──────────────────────────────────────────────
     st.markdown("""
 <div style="background:#ffffff;border:1.5px solid #e2e8f0;border-radius:14px;
             padding:1.1rem 1.2rem;box-shadow:0 2px 6px rgba(15,23,42,0.05);
@@ -1125,7 +1123,6 @@ def show():
     st.markdown("</div>", unsafe_allow_html=True)
     _gap("sm")
 
-    # ── Navigasi ──────────────────────────────────────────────
     if st.button(
         "📈 Lanjut ke Analisis Sentimen →",
         type="primary",
