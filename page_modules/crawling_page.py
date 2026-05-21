@@ -358,7 +358,7 @@ def _render_nrt_status_banner(sched_ok):
             f"<strong>{NRT_INTERVAL_MINUTES} menit</strong>. "
             f"Data mencakup <strong>7 hari terakhir</strong> berdasarkan tanggal asli tweet."
         )
-        badge = "● LIVE"
+        badge = "&#9679; LIVE"
     else:
         bg        = "linear-gradient(135deg,#eff6ff,#dbeafe)"
         bdr       = "#93c5fd"
@@ -369,9 +369,9 @@ def _render_nrt_status_banner(sched_ok):
         title     = "Crawler Siap Dijalankan"
         desc      = (
             f"Scheduler otomatis aktif setiap <strong>{NRT_INTERVAL_MINUTES} menit</strong> "
-            f"sejak aplikasi pertama dibuka — tidak perlu terminal terpisah."
+            f"sejak aplikasi pertama dibuka &mdash; tidak perlu terminal terpisah."
         )
-        badge = "◎ STANDBY"
+        badge = "&#9900; STANDBY"
 
     st.markdown(f"""
 <div style="background:{bg};border:1px solid {bdr};border-radius:14px;
@@ -437,20 +437,20 @@ def _render_monitoring_panel(last_log, last_dt, sched_ok):
         if remaining.total_seconds() > 0:
             countdown_str = format_countdown(remaining)
         elif is_crawler_running():
-            countdown_str = "⏳ Sedang crawling..."
+            countdown_str = "Sedang crawling..."
         else:
-            countdown_str = "🔄 Segera diperbarui..."
+            countdown_str = "Segera diperbarui..."
 
     status_text  = "Aktif Otomatis" if sched_ok else "Standby"
     status_color = "#16a34a"        if sched_ok else "#3b6cf7"
     status_bg    = "#dcfce7"        if sched_ok else "#dbeafe"
 
-    note_text   = f"✅ {tweet_today:,} tweet masuk hari ini" if tweet_today > 0 else "ℹ️ Belum ada tweet baru hari ini"
+    note_text   = f"{tweet_today:,} tweet masuk hari ini" if tweet_today > 0 else "Belum ada tweet baru hari ini"
     note_bg     = "#f0fdf4" if tweet_today > 0 else "#f8fafc"
     note_border = "#bbf7d0" if tweet_today > 0 else "#e8edf5"
     note_color  = "#166534" if tweet_today > 0 else "#64748b"
 
-    _section_header("📡 Status Monitoring Sistem", "Pembaruan data near-realtime · interval otomatis")
+    _section_header("&#128225; Status Monitoring Sistem", "Pembaruan data near-realtime &middot; interval otomatis")
 
     col_a, col_b = st.columns(2, gap="medium")
 
@@ -467,59 +467,62 @@ def _render_monitoring_panel(last_log, last_dt, sched_ok):
     rows_html_a = ""
     for i, (label, value, vc) in enumerate(left_rows):
         border = "none" if i == len(left_rows) - 1 else "1px solid #f1f5f9"
-        rows_html_a += f"""
-<div style="display:flex;justify-content:space-between;align-items:center;
-            padding:0.6rem 0;border-bottom:{border};">
-    <span style="font-size:0.77rem;color:#64748b;font-weight:500;">{label}</span>
-    <span style="font-size:0.78rem;font-weight:700;color:{vc};
-                 text-align:right;flex-shrink:0;max-width:58%;">{value}</span>
-</div>"""
+        rows_html_a += (
+            f'<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'padding:0.6rem 0;border-bottom:{border};">'
+            f'<span style="font-size:0.77rem;color:#64748b;font-weight:500;">{label}</span>'
+            f'<span style="font-size:0.78rem;font-weight:700;color:{vc};'
+            f'text-align:right;flex-shrink:0;max-width:58%;">{value}</span>'
+            f'</div>'
+        )
 
     with col_a:
-        st.markdown(f"""
-<div class="crawl-card">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.9rem;">
-        <span style="font-size:0.71rem;font-weight:800;color:#94a3b8;
-                     letter-spacing:0.07em;text-transform:uppercase;">⚙️ Sistem Crawling</span>
-        <span style="background:{status_bg};color:{status_color};font-size:0.68rem;
-                     font-weight:700;padding:0.22rem 0.7rem;border-radius:999px;">{status_text}</span>
-    </div>
-    {rows_html_a}
-</div>
-""", unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="crawl-card">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.9rem;">'
+            f'<span style="font-size:0.71rem;font-weight:800;color:#94a3b8;'
+            f'letter-spacing:0.07em;text-transform:uppercase;">Sistem Crawling</span>'
+            f'<span style="background:{status_bg};color:{status_color};font-size:0.68rem;'
+            f'font-weight:700;padding:0.22rem 0.7rem;border-radius:999px;">{status_text}</span>'
+            f'</div>'
+            f'{rows_html_a}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     # ── Right card: ringkasan dataset ──
     right_rows = [
-        ("Update terakhir",        last_crawl_str,          "#0f172a"),
-        ("Countdown berikutnya",   countdown_str,            "#16a34a"),
-        ("Tweet masuk hari ini",   f"{tweet_today:,} tweet", "#3b6cf7"),
-        ("Total dataset",          f"{total_db:,} tweet",    "#0f172a"),
+        ("Update terakhir",        last_crawl_str,           "#0f172a"),
+        ("Countdown berikutnya",   countdown_str,             "#16a34a"),
+        ("Tweet masuk hari ini",   f"{tweet_today:,} tweet",  "#3b6cf7"),
+        ("Total dataset",          f"{total_db:,} tweet",     "#0f172a"),
     ]
 
     rows_html_b = ""
     for i, (label, value, vc) in enumerate(right_rows):
         border = "none" if i == len(right_rows) - 1 else "1px solid #f1f5f9"
-        rows_html_b += f"""
-<div style="display:flex;justify-content:space-between;align-items:center;
-            padding:0.6rem 0;border-bottom:{border};">
-    <span style="font-size:0.77rem;color:#64748b;font-weight:500;">{label}</span>
-    <span style="font-size:0.78rem;font-weight:700;color:{vc};
-                 text-align:right;flex-shrink:0;max-width:58%;">{value}</span>
-</div>"""
+        rows_html_b += (
+            f'<div style="display:flex;justify-content:space-between;align-items:center;'
+            f'padding:0.6rem 0;border-bottom:{border};">'
+            f'<span style="font-size:0.77rem;color:#64748b;font-weight:500;">{label}</span>'
+            f'<span style="font-size:0.78rem;font-weight:700;color:{vc};'
+            f'text-align:right;flex-shrink:0;max-width:58%;">{value}</span>'
+            f'</div>'
+        )
 
     with col_b:
-        st.markdown(f"""
-<div class="crawl-card">
-    <div style="font-size:0.71rem;font-weight:800;color:#94a3b8;
-                letter-spacing:0.07em;text-transform:uppercase;margin-bottom:0.9rem;">
-        📊 Ringkasan Dataset
-    </div>
-    {rows_html_b}
-    <div style="margin-top:0.9rem;background:{note_bg};border:1px solid {note_border};
-                border-radius:10px;padding:0.7rem 0.85rem;font-size:0.76rem;
-                font-weight:700;color:{note_color};">{note_text}</div>
-</div>
-""", unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="crawl-card">'
+            f'<div style="font-size:0.71rem;font-weight:800;color:#94a3b8;'
+            f'letter-spacing:0.07em;text-transform:uppercase;margin-bottom:0.9rem;">'
+            f'Ringkasan Dataset</div>'
+            f'{rows_html_b}'
+            f'<div style="margin-top:0.9rem;background:{note_bg};border:1px solid {note_border};'
+            f'border-radius:10px;padding:0.7rem 0.85rem;font-size:0.76rem;'
+            f'font-weight:700;color:{note_color};">{note_text}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
 
 # ═══════════════════════════════════════════════════════════
@@ -527,25 +530,25 @@ def _render_monitoring_panel(last_log, last_dt, sched_ok):
 # ═══════════════════════════════════════════════════════════
 
 def _render_metrics(total, days, earliest, latest, filter_label, basis_label):
-    st.markdown(f"""
-<div style="display:flex;align-items:center;gap:0.5rem;margin:0.2rem 0 1.1rem;">
-    <span style="display:inline-flex;align-items:center;justify-content:center;
-                 width:20px;height:20px;background:#eef2ff;border-radius:5px;font-size:0.75rem;">🔄</span>
-    <span style="font-size:0.78rem;color:#64748b;">
-        Data aktif: <strong style="color:#334155;">{filter_label}</strong>
-        &nbsp;·&nbsp; {basis_label}
-    </span>
-</div>
-""", unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:0.5rem;margin:0.2rem 0 1.1rem;">'
+        f'<span style="display:inline-flex;align-items:center;justify-content:center;'
+        f'width:20px;height:20px;background:#eef2ff;border-radius:5px;font-size:0.75rem;">&#128260;</span>'
+        f'<span style="font-size:0.78rem;color:#64748b;">'
+        f'Data aktif: <strong style="color:#334155;">{filter_label}</strong>'
+        f'&nbsp;&middot;&nbsp; {basis_label}'
+        f'</span></div>',
+        unsafe_allow_html=True,
+    )
 
     pills = [
-        ("📊", "linear-gradient(135deg,#eef2ff,#e0e7ff)", "#3b6cf7", "#1e3a8a", "#dbeafe",
+        ("&#128202;", "linear-gradient(135deg,#eef2ff,#e0e7ff)", "#3b6cf7", "#1e3a8a", "#dbeafe",
          "Total Tweet", f"{total:,}", "Terkumpul periode ini"),
-        ("📅", "linear-gradient(135deg,#f0fdf4,#dcfce7)", "#16a34a", "#14532d", "#bbf7d0",
+        ("&#128197;", "linear-gradient(135deg,#f0fdf4,#dcfce7)", "#16a34a", "#14532d", "#bbf7d0",
          "Rentang Waktu", f"{days} Hari", basis_label),
-        ("🗓️", "linear-gradient(135deg,#fff7ed,#ffedd5)", "#ea580c", "#7c2d12", "#fed7aa",
+        ("&#128199;", "linear-gradient(135deg,#fff7ed,#ffedd5)", "#ea580c", "#7c2d12", "#fed7aa",
          "Mulai Dari", earliest, "Tanggal awal"),
-        ("📆", "linear-gradient(135deg,#fefce8,#fef9c3)", "#ca8a04", "#713f12", "#fde68a",
+        ("&#128198;", "linear-gradient(135deg,#fefce8,#fef9c3)", "#ca8a04", "#713f12", "#fde68a",
          "Sampai Dengan", latest, "Tanggal akhir"),
     ]
 
@@ -553,20 +556,21 @@ def _render_metrics(total, days, earliest, latest, filter_label, basis_label):
     for col, (icon, bg, color, dark, border_c, label, val, sub) in zip([c1, c2, c3, c4], pills):
         with col:
             fs = "1.1rem" if len(str(val)) > 10 else "1.55rem"
-            st.markdown(f"""
-<div class="metric-pill" style="background:{bg};border:1px solid {border_c};
-            box-shadow:0 2px 10px {color}18;">
-    <div style="width:36px;height:36px;background:{color};border-radius:10px;
-                display:flex;align-items:center;justify-content:center;
-                font-size:0.95rem;margin:0 auto 0.65rem;
-                box-shadow:0 4px 10px {color}44;">{icon}</div>
-    <div style="font-size:0.62rem;font-weight:800;color:{color};
-                text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.3rem;">{label}</div>
-    <div class="stat-num" style="font-size:{fs};font-weight:800;color:{dark};
-                line-height:1.15;margin-bottom:0.25rem;">{val}</div>
-    <div style="font-size:0.66rem;color:{color};font-weight:600;opacity:0.85;">{sub}</div>
-</div>
-""", unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="metric-pill" style="background:{bg};border:1px solid {border_c};'
+                f'box-shadow:0 2px 10px {color}18;">'
+                f'<div style="width:36px;height:36px;background:{color};border-radius:10px;'
+                f'display:flex;align-items:center;justify-content:center;'
+                f'font-size:0.95rem;margin:0 auto 0.65rem;'
+                f'box-shadow:0 4px 10px {color}44;">{icon}</div>'
+                f'<div style="font-size:0.62rem;font-weight:800;color:{color};'
+                f'text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.3rem;">{label}</div>'
+                f'<div class="stat-num" style="font-size:{fs};font-weight:800;color:{dark};'
+                f'line-height:1.15;margin-bottom:0.25rem;">{val}</div>'
+                f'<div style="font-size:0.66rem;color:{color};font-weight:600;opacity:0.85;">{sub}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
 
 # ═══════════════════════════════════════════════════════════
@@ -667,6 +671,7 @@ def _render_charts(df, filter_label, date_col, chart_label, dt_start, dt_end):
         legend_items.insert(1, ("#a78bfa", "Terendah"))
     if any(c == 0 for c in counts_day):
         legend_items.append(("#cbd5e1", "Tidak ada data"))
+
     legend_html = "".join([
         f'<span style="display:inline-flex;align-items:center;gap:4px;margin-right:12px;">'
         f'<span style="width:10px;height:10px;border-radius:3px;background:{clr};display:inline-block;"></span>'
@@ -683,7 +688,7 @@ def _render_charts(df, filter_label, date_col, chart_label, dt_start, dt_end):
 
     def _date_pills(days_list, color, max_show=4):
         if not days_list:
-            return '<span style="font-size:0.72rem;color:#94a3b8;">—</span>'
+            return '<span style="font-size:0.72rem;color:#94a3b8;">&#8212;</span>'
         pills = ""
         for d in days_list[:max_show]:
             pills += (
@@ -692,11 +697,14 @@ def _render_charts(df, filter_label, date_col, chart_label, dt_start, dt_end):
                 f'font-weight:700;margin:2px 2px 0 0;">{d}</span>'
             )
         if len(days_list) > max_show:
-            pills += f'<span style="font-size:0.65rem;color:#94a3b8;margin-left:2px;">+{len(days_list)-max_show} lainnya</span>'
+            pills += (
+                f'<span style="font-size:0.65rem;color:#94a3b8;margin-left:2px;">'
+                f'+{len(days_list)-max_show} lainnya</span>'
+            )
         return pills
 
     if not busiest_list:
-        busy_main, busy_count, busy_pills = "—", "Belum ada data", ""
+        busy_main, busy_count, busy_pills = "&#8212;", "Belum ada data", ""
     elif len(busiest_list) == 1:
         busy_main, busy_count, busy_pills = busiest_list[0], f"{max_cnt:,} tweet", ""
     else:
@@ -705,7 +713,7 @@ def _render_charts(df, filter_label, date_col, chart_label, dt_start, dt_end):
         busy_pills = _date_pills(busiest_list, "#ea580c")
 
     if not quietest_list:
-        quiet_main, quiet_count, quiet_pills = "—", "Belum ada data aktif", ""
+        quiet_main, quiet_count, quiet_pills = "&#8212;", "Belum ada data aktif", ""
     elif len(quietest_list) == 1:
         quiet_main, quiet_count, quiet_pills = quietest_list[0], f"{min_cnt:,} tweet", ""
     else:
@@ -718,11 +726,11 @@ def _render_charts(df, filter_label, date_col, chart_label, dt_start, dt_end):
         aktif_main, aktif_count, aktif_pills = "0 Hari Aktif", f"Dari {total_days} hari, belum ada data", ""
     elif active_days == total_days:
         aktif_main  = f"{active_days} / {total_days} Hari"
-        aktif_count = f"100% hari ada tweet · total {total_tweets:,} tweet"
+        aktif_count = f"100% hari ada tweet &middot; total {total_tweets:,} tweet"
         aktif_pills = ""
     else:
         aktif_main  = f"{active_days} / {total_days} Hari"
-        aktif_count = f"{pct_active}% hari aktif · {inactive_days} hari kosong"
+        aktif_count = f"{pct_active}% hari aktif &middot; {inactive_days} hari kosong"
         aktif_pills = ""
 
     def _insight_card(col, icon, bg, color, dark, border_c, title, main, count_txt, pills_html):
@@ -731,32 +739,33 @@ def _render_charts(df, filter_label, date_col, chart_label, dt_start, dt_end):
                 f'<div style="margin-top:0.4rem;line-height:1.8;">{pills_html}</div>'
                 if pills_html else ""
             )
-            st.markdown(f"""
-<div class="mode-card" style="background:{bg};border:1px solid {border_c};
-        border-radius:14px;padding:0.9rem 1rem 0.95rem;
-        box-shadow:0 3px 12px {color}12;min-height:106px;">
-    <div style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.55rem;">
-        <div style="width:30px;height:30px;background:{color};border-radius:8px;
-                    display:flex;align-items:center;justify-content:center;
-                    font-size:0.85rem;flex-shrink:0;box-shadow:0 3px 7px {color}38;">{icon}</div>
-        <span style="font-size:0.58rem;font-weight:800;color:{color};
-                     text-transform:uppercase;letter-spacing:0.08em;">{title}</span>
-    </div>
-    <div style="font-size:0.95rem;font-weight:800;color:{dark};
-                line-height:1.25;margin-bottom:0.15rem;">{main}</div>
-    <div style="font-size:0.67rem;color:{color};font-weight:500;
-                opacity:0.9;line-height:1.45;">{count_txt}</div>
-    {pills_block}
-</div>
-""", unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="mode-card" style="background:{bg};border:1px solid {border_c};'
+                f'border-radius:14px;padding:0.9rem 1rem 0.95rem;'
+                f'box-shadow:0 3px 12px {color}12;min-height:106px;">'
+                f'<div style="display:flex;align-items:center;gap:0.55rem;margin-bottom:0.55rem;">'
+                f'<div style="width:30px;height:30px;background:{color};border-radius:8px;'
+                f'display:flex;align-items:center;justify-content:center;'
+                f'font-size:0.85rem;flex-shrink:0;box-shadow:0 3px 7px {color}38;">{icon}</div>'
+                f'<span style="font-size:0.58rem;font-weight:800;color:{color};'
+                f'text-transform:uppercase;letter-spacing:0.08em;">{title}</span>'
+                f'</div>'
+                f'<div style="font-size:0.95rem;font-weight:800;color:{dark};'
+                f'line-height:1.25;margin-bottom:0.15rem;">{main}</div>'
+                f'<div style="font-size:0.67rem;color:{color};font-weight:500;'
+                f'opacity:0.9;line-height:1.45;">{count_txt}</div>'
+                f'{pills_block}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
-    _insight_card(pc1, "🔥", "linear-gradient(135deg,#fff7ed,#ffedd5)",
+    _insight_card(pc1, "&#128293;", "linear-gradient(135deg,#fff7ed,#ffedd5)",
                   "#ea580c", "#7c2d12", "#fed7aa",
                   "Hari Paling Ramai", busy_main, busy_count, busy_pills)
-    _insight_card(pc2, "🌙", "linear-gradient(135deg,#f5f3ff,#ede9fe)",
+    _insight_card(pc2, "&#127769;", "linear-gradient(135deg,#f5f3ff,#ede9fe)",
                   "#7c3aed", "#3b0764", "#ddd6fe",
                   "Hari Paling Sepi", quiet_main, quiet_count, quiet_pills)
-    _insight_card(pc3, "📆", "linear-gradient(135deg,#f0fdf4,#dcfce7)",
+    _insight_card(pc3, "&#128198;", "linear-gradient(135deg,#f0fdf4,#dcfce7)",
                   "#16a34a", "#14532d", "#bbf7d0",
                   "Hari Aktif", aktif_main, aktif_count, aktif_pills)
 
@@ -771,9 +780,9 @@ def get_filtered_data(df_all):
     mode  = st.session_state.analysis_mode
 
     if mode == "realtime":
-        mode_display = "Tweet Terkini — 7 Hari Terakhir"
+        mode_display = "Tweet Terkini &mdash; 7 Hari Terakhir"
         mode_color   = "#16a34a"
-        mode_icon    = "📡"
+        mode_icon    = "&#128225;"
         date_col     = "created_at"
         basis_label  = "Berdasarkan tanggal asli tweet"
         chart_label  = "tanggal asli tweet"
@@ -783,7 +792,7 @@ def get_filtered_data(df_all):
     elif mode == "30days":
         mode_display = "30 Hari Terakhir"
         mode_color   = "#3b6cf7"
-        mode_icon    = "📅"
+        mode_icon    = "&#128197;"
         date_col     = "created_at"
         basis_label  = "Berdasarkan tanggal asli tweet"
         chart_label  = "tanggal asli tweet"
@@ -793,7 +802,7 @@ def get_filtered_data(df_all):
     elif mode == "captured":
         mode_display = "Tweet Hari Ini"
         mode_color   = "#0284c7"
-        mode_icon    = "📆"
+        mode_icon    = "&#128198;"
         date_col     = "created_at"
         basis_label  = "Berdasarkan tanggal asli tweet"
         chart_label  = "tanggal asli tweet"
@@ -805,7 +814,7 @@ def get_filtered_data(df_all):
         end_date     = st.session_state.get("custom_end_date", today)
         mode_display = "Periode Historis Pilihan"
         mode_color   = "#d97706"
-        mode_icon    = "🔍"
+        mode_icon    = "&#128269;"
         date_col     = "created_at"
         basis_label  = "Berdasarkan tanggal asli tweet"
         chart_label  = "tanggal asli tweet"
@@ -835,6 +844,146 @@ def get_filtered_data(df_all):
 
 
 # ═══════════════════════════════════════════════════════════
+#  PAGE HEADER  (dipecah jadi beberapa st.markdown() kecil)
+# ═══════════════════════════════════════════════════════════
+
+def _render_page_header():
+    # Bangun semua bagian dalam Python dulu, baru render SEKALI
+    chip_data = [
+        ("&#128260;", "Interval crawling", f"Setiap {NRT_INTERVAL_MINUTES} menit"),
+        ("&#128197;", "Jangkauan data",    "7 hari terakhir"),
+        ("&#128451;", "Penyimpanan",       "Database lokal"),
+        ("&#129302;", "Model prediksi",    "Naive Bayes"),
+    ]
+    chips_html = "".join(
+        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;'
+        'padding:0.75rem 1rem;display:flex;align-items:center;gap:10px;">'
+        f'<span style="font-size:1.1rem;flex-shrink:0;">{ico}</span>'
+        '<div>'
+        f'<div style="font-size:0.63rem;color:#94a3b8;font-weight:700;'
+        f'text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">{lbl}</div>'
+        f'<div style="font-size:0.84rem;font-weight:700;color:#0f172a;">{val}</div>'
+        '</div></div>'
+        for ico, lbl, val in chip_data
+    )
+
+    PIPELINE_STEPS = [
+        ("&#128038;", "Crawling tweet"),
+        ("&#128451;", "Simpan ke database"),
+        ("&#129529;", "Preprocessing teks"),
+        ("&#129302;", "Prediksi sentimen"),
+        ("&#128202;", "Visualisasi hasil"),
+    ]
+    pipeline_steps_html = " ".join(
+        (
+            f'<span style="display:inline-flex;align-items:center;gap:5px;'
+            f'background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;'
+            f'padding:5px 13px;font-size:0.73rem;color:#475569;white-space:nowrap;">'
+            f'{icon}&nbsp;{label}</span>'
+            + (
+                '<span style="color:#cbd5e1;font-size:0.85rem;margin:0 2px;">&#8594;</span>'
+                if i < len(PIPELINE_STEPS) - 1 else ""
+            )
+        )
+        for i, (icon, label) in enumerate(PIPELINE_STEPS)
+    )
+
+    html = (
+        # ── outer card ──
+        '<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;'
+        'padding:1.6rem 1.8rem 1.4rem;margin-bottom:1.5rem;'
+        'box-shadow:0 4px 24px rgba(15,23,42,0.07);">'
+
+        # ── row 1: icon + title + description ──
+        '<div style="display:flex;align-items:flex-start;gap:1.1rem;margin-bottom:1.4rem;">'
+
+        # icon
+        '<div style="width:54px;height:54px;flex-shrink:0;'
+        'background:linear-gradient(135deg,#3b6cf7,#6366f1);border-radius:15px;'
+        'display:flex;align-items:center;justify-content:center;font-size:1.55rem;'
+        'box-shadow:0 6px 18px rgba(59,108,247,0.28);">&#128038;</div>'
+
+        # title block
+        '<div style="flex:1;min-width:0;padding-top:3px;">'
+        '<div style="display:flex;align-items:center;gap:0.65rem;margin-bottom:6px;flex-wrap:wrap;">'
+        '<h2 style="font-size:1.15rem;font-weight:800;color:#0f172a;'
+        'margin:0;letter-spacing:-0.02em;line-height:1.25;">'
+        'Crawling Data Twitter &mdash; Komdigi &amp; Isu Ongkir'
+        '</h2>'
+        '<span style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:999px;'
+        'padding:3px 11px;font-size:0.68rem;font-weight:700;color:#16a34a;'
+        'display:inline-flex;align-items:center;gap:5px;white-space:nowrap;">'
+        '<span class="pulse-dot-green" style="width:6px;height:6px;border-radius:50%;'
+        'background:#16a34a;display:inline-block;"></span>'
+        'Live Monitor'
+        '</span>'
+        '</div>'
+        '<p style="font-size:0.815rem;color:#64748b;margin:0;line-height:1.75;">'
+        'Dashboard analisis sentimen tweet seputar '
+        '<strong style="color:#334155;">kebijakan ongkos kirim gratis</strong> dan '
+        '<strong style="color:#334155;">Komdigi</strong>. '
+        'Sistem mengumpulkan tweet otomatis, menyimpan ke database lokal, '
+        'membersihkan teks Bahasa Indonesia, lalu memprediksi sentimen '
+        '(<em>positif / negatif / netral</em>) via model '
+        '<strong style="color:#334155;">Naive Bayes</strong> '
+        '&mdash; near-realtime tanpa intervensi manual.'
+        '</p>'
+        '</div>'
+        '</div>'   # end row 1
+
+        # ── divider ──
+        '<div style="height:1px;background:#f1f5f9;margin-bottom:1.2rem;"></div>'
+
+        # ── row 2: chips ──
+        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.2rem;">'
+        f'{chips_html}'
+        '</div>'
+
+        # ── divider ──
+        '<div style="height:1px;background:#f1f5f9;margin-bottom:1.2rem;"></div>'
+
+        # ── row 3: query box ──
+        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;'
+        'padding:0.9rem 1.1rem;margin-bottom:1.2rem;">'
+        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+        '<span style="font-size:0.65rem;font-weight:800;color:#94a3b8;'
+        'text-transform:uppercase;letter-spacing:0.08em;">&#128269; Query pencarian aktif</span>'
+        '<span style="background:#eef2ff;color:#3b6cf7;border-radius:999px;'
+        'font-size:0.65rem;font-weight:700;padding:2px 9px;border:1px solid #c7d7fd;">'
+        'Twitter / X Search'
+        '</span>'
+        '</div>'
+        '<div style="font-family:\'Fira Mono\',\'Courier New\',monospace;font-size:0.8rem;'
+        'color:#334155;line-height:2;word-break:break-word;">'
+        '<span style="color:#3b6cf7;font-weight:700;">komdigi</span> '
+        '(<span style="color:#3b6cf7;font-weight:700;">ongkir</span> OR '
+        '<span style="color:#3b6cf7;font-weight:700;">&quot;gratis ongkir&quot;</span> OR '
+        '<span style="color:#3b6cf7;font-weight:700;">&quot;free ongkir&quot;</span>) OR '
+        '<span style="color:#3b6cf7;font-weight:700;">&quot;pembatasan gratis ongkir&quot;</span> OR '
+        '<span style="color:#3b6cf7;font-weight:700;">&quot;gratis ongkir dibatasi&quot;</span>'
+        '</div>'
+        '<div style="margin-top:9px;padding-top:9px;border-top:1px solid #e8edf5;'
+        'font-size:0.7rem;color:#94a3b8;line-height:1.6;">'
+        'Mencakup variasi: <em>ongkir, gratis ongkir, free ongkir</em>'
+        ' &mdash; termasuk konteks pembatasan subsidi ongkir oleh Komdigi.'
+        '</div>'
+        '</div>'   # end query box
+
+        # ── row 4: pipeline ──
+        '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
+        '<span style="font-size:0.63rem;font-weight:800;color:#94a3b8;'
+        'text-transform:uppercase;letter-spacing:0.08em;margin-right:8px;white-space:nowrap;">'
+        '&#9881; Alur kerja</span>'
+        f'{pipeline_steps_html}'
+        '</div>'
+
+        '</div>'   # end outer card
+    )
+
+    st.markdown(html, unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════
 #  MAIN PAGE
 # ═══════════════════════════════════════════════════════════
 
@@ -850,51 +999,7 @@ def show():
         st.session_state.filter_end_date = today
 
     # ── Page Header ──────────────────────────────────────────────
-    st.markdown(f"""
-<div class="page-header-card" style="
-    background: linear-gradient(135deg, #ffffff 0%, #f0f5ff 50%, #eef2ff 100%);
-    border: 1px solid #e0e7ff;
-    border-radius: 20px;
-    padding: 1.5rem 1.75rem;
-    margin-bottom: 1.5rem;
-    box-shadow: 0 4px 20px rgba(59,108,247,0.08);
-    display: flex;
-    align-items: center;
-    gap: 1.1rem;
-">
-    <div style="
-        width: 52px; height: 52px;
-        background: linear-gradient(135deg, #3b6cf7, #6366f1);
-        border-radius: 14px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 1.5rem;
-        box-shadow: 0 6px 16px rgba(59,108,247,0.35);
-        flex-shrink: 0;
-    ">🐦</div>
-    <div>
-        <h2 style="
-            font-size: 1.25rem; font-weight: 800; color: #0f172a;
-            margin: 0 0 4px; letter-spacing: -0.01em; line-height: 1.2;
-        ">Crawling Data Twitter</h2>
-        <p style="font-size: 0.8rem; color: #64748b; margin: 0; line-height: 1.5;">
-            Sistem crawling berjalan otomatis setiap
-            <strong style="color:#3b6cf7;">{NRT_INTERVAL_MINUTES} menit</strong>
-            — mengambil data
-            <strong style="color:#3b6cf7;">7 hari terakhir</strong>
-            secara near-realtime
-        </p>
-    </div>
-    <div style="
-        margin-left: auto;
-        background: linear-gradient(135deg,#eef2ff,#e0e7ff);
-        border: 1px solid #c7d2fe;
-        border-radius: 10px;
-        padding: 0.45rem 0.9rem;
-        font-size: 0.72rem; font-weight: 700; color: #3b6cf7;
-        white-space: nowrap; letter-spacing: 0.04em; text-transform: uppercase;
-    ">🔄 Live Monitor</div>
-</div>
-""", unsafe_allow_html=True)
+    _render_page_header()
 
     # ── Mode Selector ─────────────────────────────────────────────
     if "analysis_mode" not in st.session_state:
@@ -904,29 +1009,29 @@ def show():
 
     MODE_CFG = {
         "captured": {
-            "col": col1, "key": "btn_captured", "label": "📆 Hari Ini",
-            "title": "Tweet Hari Ini", "icon": "📆",
+            "col": col1, "key": "btn_captured", "label": "Hari Ini",
+            "title": "Tweet Hari Ini", "icon": "&#128198;",
             "desc": "Tanggal asli <strong>hari ini</strong>",
             "gradient": "linear-gradient(135deg,#eff6ff,#dbeafe)",
             "border": "#bfdbfe", "color": "#1d4ed8", "dark": "#1e3a8a",
         },
         "realtime": {
-            "col": col2, "key": "btn_realtime", "label": "📡 7 Hari",
-            "title": "Terkini (7 Hari)", "icon": "📡",
+            "col": col2, "key": "btn_realtime", "label": "7 Hari",
+            "title": "Terkini (7 Hari)", "icon": "&#128225;",
             "desc": "<strong>7 hari terakhir</strong>",
             "gradient": "linear-gradient(135deg,#f0fdf4,#dcfce7)",
             "border": "#86efac", "color": "#16a34a", "dark": "#14532d",
         },
         "30days": {
-            "col": col3, "key": "btn_30days", "label": "📅 30 Hari",
-            "title": "30 Hari Terakhir", "icon": "📅",
+            "col": col3, "key": "btn_30days", "label": "30 Hari",
+            "title": "30 Hari Terakhir", "icon": "&#128197;",
             "desc": "<strong>30 hari terakhir</strong>",
             "gradient": "linear-gradient(135deg,#eef2ff,#e0e7ff)",
             "border": "#a5b4fc", "color": "#3b6cf7", "dark": "#1e3a8a",
         },
         "custom": {
-            "col": col4, "key": "btn_custom", "label": "🔍 Pilih Tanggal",
-            "title": "Pilih Tanggal", "icon": "🔍",
+            "col": col4, "key": "btn_custom", "label": "Pilih Tanggal",
+            "title": "Pilih Tanggal", "icon": "&#128269;",
             "desc": "Historis <strong>custom</strong>",
             "gradient": "linear-gradient(135deg,#fefce8,#fef9c3)",
             "border": "#fde68a", "color": "#d97706", "dark": "#713f12",
@@ -957,20 +1062,21 @@ def show():
                 if active else ""
             )
 
-            st.markdown(f"""
-<div class="mode-card" style="background:{bg};border:{border_style};
-        border-radius:14px;padding:1rem 0.85rem;margin-top:0.3rem;
-        text-align:center;box-shadow:{shadow};">
-    <div style="width:38px;height:38px;background:{icon_bg};border-radius:10px;
-                display:flex;align-items:center;justify-content:center;
-                font-size:1.1rem;margin:0 auto 0.55rem;
-                box-shadow:{icon_shadow};">{cfg['icon']}</div>
-    <div style="font-size:0.8rem;font-weight:700;color:{dark};margin-bottom:0.22rem;">
-        {cfg['title']}</div>
-    <div style="font-size:0.68rem;color:{color};line-height:1.45;">{cfg['desc']}</div>
-    {underline}
-</div>
-""", unsafe_allow_html=True)
+            st.markdown(
+                f'<div class="mode-card" style="background:{bg};border:{border_style};'
+                f'border-radius:14px;padding:1rem 0.85rem;margin-top:0.3rem;'
+                f'text-align:center;box-shadow:{shadow};">'
+                f'<div style="width:38px;height:38px;background:{icon_bg};border-radius:10px;'
+                f'display:flex;align-items:center;justify-content:center;'
+                f'font-size:1.1rem;margin:0 auto 0.55rem;'
+                f'box-shadow:{icon_shadow};">{cfg["icon"]}</div>'
+                f'<div style="font-size:0.8rem;font-weight:700;color:{dark};margin-bottom:0.22rem;">'
+                f'{cfg["title"]}</div>'
+                f'<div style="font-size:0.68rem;color:{color};line-height:1.45;">{cfg["desc"]}</div>'
+                f'{underline}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
 
     _gap("md")
 
@@ -978,7 +1084,7 @@ def show():
     try:
         df_all = pd.read_sql("SELECT * FROM tweets ORDER BY created_at DESC", engine)
     except Exception as e:
-        st.error(f"❌ Gagal membaca database: {str(e)}")
+        st.error(f"Gagal membaca database: {str(e)}")
         return
 
     if len(df_all) == 0:
@@ -995,18 +1101,19 @@ def show():
             min_db = df_check["created_at"].min().date()
             max_db = df_check["created_at"].max().date()
 
-            st.markdown(f"""
-<div class="crawl-card" style="margin-bottom:1rem;">
-    <p style="font-size:0.875rem;font-weight:700;color:#0f172a;margin:0 0 0.25rem;">
-        📅 Pilih Rentang Tanggal Tweet Historis</p>
-    <p style="font-size:0.775rem;color:#64748b;margin:0;line-height:1.6;">
-        Data tersedia dari
-        <strong style="color:#0f172a;">{min_db.strftime('%d/%m/%Y')}</strong>
-        hingga
-        <strong style="color:#0f172a;">{max_db.strftime('%d/%m/%Y')}</strong>
-    </p>
-</div>
-""", unsafe_allow_html=True)
+            st.markdown(
+                '<div class="crawl-card" style="margin-bottom:1rem;">'
+                '<p style="font-size:0.875rem;font-weight:700;color:#0f172a;margin:0 0 0.25rem;">'
+                '&#128197; Pilih Rentang Tanggal Tweet Historis</p>'
+                f'<p style="font-size:0.775rem;color:#64748b;margin:0;line-height:1.6;">'
+                f'Data tersedia dari '
+                f'<strong style="color:#0f172a;">{min_db.strftime("%d/%m/%Y")}</strong>'
+                f' hingga '
+                f'<strong style="color:#0f172a;">{max_db.strftime("%d/%m/%Y")}</strong>'
+                f'</p>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
             with st.container():
                 c1, c2, c3 = st.columns([2, 2, 1], gap="medium")
@@ -1038,13 +1145,13 @@ def show():
                                        key="custom_end_input")
                     st.session_state.custom_end_date = ce
                 with c3:
-                    if st.button("✅ Terapkan", type="primary", use_container_width=True):
-                        st.success("✅ Periode diterapkan!")
+                    if st.button("Terapkan", type="primary", use_container_width=True):
+                        st.success("Periode diterapkan!")
                         time.sleep(0.8)
                         st.rerun()
 
     # ═══════════════════════════════════════════════════════════
-    #  MODE: TWEET HARI INI (captured) — monitoring + log table
+    #  MODE: TWEET HARI INI (captured)
     # ═══════════════════════════════════════════════════════════
     if st.session_state.analysis_mode == "captured":
         st_autorefresh(interval=1000, key="crawler_monitor_refresh")
@@ -1075,14 +1182,14 @@ def show():
                     crawl_time = log.get("timestamp", "-") or "-"
 
                 if status == "success":
-                    status_label = "✅ Berhasil"
+                    status_label = "Berhasil"
                     note = (
                         f"{total_saved:,} tweet baru tersimpan"
                         if total_saved > 0
                         else "Crawling berhasil, tidak ada tweet baru"
                     )
                 else:
-                    status_label = "❌ Gagal"
+                    status_label = "Gagal"
                     note = error_msg or "Terjadi kesalahan saat crawling"
 
                 rows.append({
@@ -1094,8 +1201,8 @@ def show():
                 })
 
             _section_header(
-                "🕒 Riwayat Crawling Otomatis",
-                f"{len(rows)} aktivitas terbaru · interval {NRT_INTERVAL_MINUTES} menit"
+                "&#128336; Riwayat Crawling Otomatis",
+                f"{len(rows)} aktivitas terbaru &middot; interval {NRT_INTERVAL_MINUTES} menit"
             )
             _gap("xs")
             render_standard_table(
@@ -1111,17 +1218,18 @@ def show():
                 },
             )
         else:
-            st.markdown(f"""
-<div class="crawl-card" style="text-align:center;padding:2rem;">
-    <div style="font-size:2rem;margin-bottom:0.75rem;">⏳</div>
-    <div style="font-size:0.88rem;font-weight:700;color:#334155;margin-bottom:0.3rem;">
-        Menunggu Crawl Pertama</div>
-    <div style="font-size:0.77rem;color:#64748b;">
-        Riwayat akan muncul setelah crawl otomatis pertama selesai
-        (maks. {NRT_INTERVAL_MINUTES} menit sejak aplikasi dibuka)
-    </div>
-</div>
-""", unsafe_allow_html=True)
+            st.markdown(
+                '<div class="crawl-card" style="text-align:center;padding:2rem;">'
+                '<div style="font-size:2rem;margin-bottom:0.75rem;">&#9203;</div>'
+                '<div style="font-size:0.88rem;font-weight:700;color:#334155;margin-bottom:0.3rem;">'
+                'Menunggu Crawl Pertama</div>'
+                f'<div style="font-size:0.77rem;color:#64748b;">'
+                f'Riwayat akan muncul setelah crawl otomatis pertama selesai '
+                f'(maks. {NRT_INTERVAL_MINUTES} menit sejak aplikasi dibuka)'
+                f'</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
         _gap("lg")
 
@@ -1140,22 +1248,23 @@ def show():
         ].sort_values("crawled_at", ascending=False)
 
         _section_header(
-            "🤖 Tweet yang Diambil Bot Hari Ini",
+            "&#129302; Tweet yang Diambil Bot Hari Ini",
             "Semua tweet yang berhasil disimpan crawler hari ini"
         )
         _gap("xs")
 
         if bot_df.empty:
-            st.markdown(f"""
-<div class="crawl-card" style="text-align:center;padding:2rem;">
-    <div style="font-size:2rem;margin-bottom:0.75rem;">🐦</div>
-    <div style="font-size:0.88rem;font-weight:700;color:#334155;margin-bottom:0.3rem;">
-        Belum Ada Tweet Hari Ini</div>
-    <div style="font-size:0.77rem;color:#64748b;">
-        Tweet baru akan muncul setelah crawl berikutnya selesai
-    </div>
-</div>
-""", unsafe_allow_html=True)
+            st.markdown(
+                '<div class="crawl-card" style="text-align:center;padding:2rem;">'
+                '<div style="font-size:2rem;margin-bottom:0.75rem;">&#128038;</div>'
+                '<div style="font-size:0.88rem;font-weight:700;color:#334155;margin-bottom:0.3rem;">'
+                'Belum Ada Tweet Hari Ini</div>'
+                '<div style="font-size:0.77rem;color:#64748b;">'
+                'Tweet baru akan muncul setelah crawl berikutnya selesai'
+                '</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
         else:
             bot_disp = bot_df.head(100).copy()
             bot_disp["Tanggal Tweet"]   = bot_disp["created_at"].apply(format_dt)
@@ -1201,32 +1310,33 @@ def show():
 
     # ── Active Filter Banner ──────────────────────────────────
     total = len(df)
-    st.markdown(f"""
-<div style="display:flex;align-items:center;gap:0.9rem;
-            background:#ffffff;
-            border-left:4px solid {mode_color};
-            border-top:1px solid #e8edf5;
-            border-right:1px solid #e8edf5;
-            border-bottom:1px solid #e8edf5;
-            border-radius:0 14px 14px 0;
-            padding:0.75rem 1.3rem;margin-bottom:1rem;
-            box-shadow:0 2px 8px rgba(15,23,42,0.04);">
-    <span style="font-size:1.45rem;">{mode_icon}</span>
-    <div style="flex:1;">
-        <p style="font-size:0.88rem;font-weight:700;color:#0f172a;margin:0 0 2px;">{mode_display}</p>
-        <p style="font-size:0.74rem;color:#64748b;margin:0;">
-            Periode aktif: <strong style="color:{mode_color};">{filter_label}</strong>
-            &nbsp;·&nbsp; {basis_label}
-        </p>
-    </div>
-    <div style="margin-left:auto;background:{mode_color}14;color:{mode_color};
-                border:1px solid {mode_color}33;
-                font-size:0.7rem;font-weight:800;padding:0.3rem 0.8rem;
-                border-radius:999px;letter-spacing:0.04em;white-space:nowrap;">
-        {total:,} tweet
-    </div>
-</div>
-""", unsafe_allow_html=True)
+    st.markdown(
+        f'<div style="display:flex;align-items:center;gap:0.9rem;'
+        f'background:#ffffff;'
+        f'border-left:4px solid {mode_color};'
+        f'border-top:1px solid #e8edf5;'
+        f'border-right:1px solid #e8edf5;'
+        f'border-bottom:1px solid #e8edf5;'
+        f'border-radius:0 14px 14px 0;'
+        f'padding:0.75rem 1.3rem;margin-bottom:1rem;'
+        f'box-shadow:0 2px 8px rgba(15,23,42,0.04);">'
+        f'<span style="font-size:1.45rem;">{mode_icon}</span>'
+        f'<div style="flex:1;">'
+        f'<p style="font-size:0.88rem;font-weight:700;color:#0f172a;margin:0 0 2px;">{mode_display}</p>'
+        f'<p style="font-size:0.74rem;color:#64748b;margin:0;">'
+        f'Periode aktif: <strong style="color:{mode_color};">{filter_label}</strong>'
+        f'&nbsp;&middot;&nbsp; {basis_label}'
+        f'</p>'
+        f'</div>'
+        f'<div style="margin-left:auto;background:{mode_color}14;color:{mode_color};'
+        f'border:1px solid {mode_color}33;'
+        f'font-size:0.7rem;font-weight:800;padding:0.3rem 0.8rem;'
+        f'border-radius:999px;letter-spacing:0.04em;white-space:nowrap;">'
+        f'{total:,} tweet'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     days     = (pd.Timestamp(dt_end).date() - pd.Timestamp(dt_start).date()).days + 1
     earliest = pd.Timestamp(dt_start).strftime("%d/%m/%Y")
@@ -1235,42 +1345,44 @@ def show():
     _render_metrics(total, days, earliest, latest, filter_label, basis_label)
 
     if total == 0:
-        _section_header("📋 Daftar Tweet yang Terkumpul", f"0 tweet · {filter_label}")
-        st.markdown(f"""
-<div class="crawl-card" style="text-align:center;padding:2rem;">
-    <div style="font-size:2rem;margin-bottom:0.75rem;">🔍</div>
-    <div style="font-size:0.88rem;font-weight:700;color:#334155;margin-bottom:0.3rem;">
-        Tidak Ada Data</div>
-    <div style="font-size:0.77rem;color:#64748b;">
-        Belum ada tweet dengan tanggal asli pada periode ini
-    </div>
-</div>
-""", unsafe_allow_html=True)
+        _section_header("&#128203; Daftar Tweet yang Terkumpul", f"0 tweet &middot; {filter_label}")
+        st.markdown(
+            '<div class="crawl-card" style="text-align:center;padding:2rem;">'
+            '<div style="font-size:2rem;margin-bottom:0.75rem;">&#128269;</div>'
+            '<div style="font-size:0.88rem;font-weight:700;color:#334155;margin-bottom:0.3rem;">'
+            'Tidak Ada Data</div>'
+            '<div style="font-size:0.77rem;color:#64748b;">'
+            'Belum ada tweet dengan tanggal asli pada periode ini'
+            '</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
         return
 
     # ── Chart ─────────────────────────────────────────────────
-    st.markdown(f"""
-<div class="crawl-card" style="padding-bottom:0.4rem;">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.1rem;">
-        <p style="font-size:0.87rem;font-weight:700;color:#0f172a;margin:0;">
-            📊 Distribusi Tweet Per Hari</p>
-        <span style="font-size:0.67rem;font-weight:600;color:#94a3b8;
-                     background:#f8fafc;border:1px solid #e8edf5;
-                     border-radius:6px;padding:0.18rem 0.55rem;">{filter_label}</span>
-    </div>
-    <p style="font-size:0.69rem;color:#94a3b8;margin:2px 0 0;">
-        Berdasarkan {chart_label}
-    </p>
-</div>
-""", unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="crawl-card" style="padding-bottom:0.4rem;">'
+        f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.1rem;">'
+        f'<p style="font-size:0.87rem;font-weight:700;color:#0f172a;margin:0;">'
+        f'&#128202; Distribusi Tweet Per Hari</p>'
+        f'<span style="font-size:0.67rem;font-weight:600;color:#94a3b8;'
+        f'background:#f8fafc;border:1px solid #e8edf5;'
+        f'border-radius:6px;padding:0.18rem 0.55rem;">{filter_label}</span>'
+        f'</div>'
+        f'<p style="font-size:0.69rem;color:#94a3b8;margin:2px 0 0;">'
+        f'Berdasarkan {chart_label}'
+        f'</p>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     _render_charts(df, filter_label, date_col, chart_label, dt_start, dt_end)
 
     # ── Tabel ─────────────────────────────────────────────────
     display_limit = 100
     _section_header(
-        "📋 Daftar Tweet yang Terkumpul",
-        f"Menampilkan hingga {display_limit} tweet terbaru · {filter_label}"
+        "&#128203; Daftar Tweet yang Terkumpul",
+        f"Menampilkan hingga {display_limit} tweet terbaru &middot; {filter_label}"
     )
     _gap("xs")
 
@@ -1297,7 +1409,7 @@ def show():
     c_dl, c_nav = st.columns(2)
     with c_dl:
         st.download_button(
-            f"📥 Unduh Semua Data ({total:,} tweet)",
+            f"Unduh Semua Data ({total:,} tweet)",
             df.to_csv(index=False).encode("utf-8"),
             f"data_twitter_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
             "text/csv",
@@ -1305,7 +1417,7 @@ def show():
         )
     with c_nav:
         if st.button(
-            "🧹 Lanjut ke Bersihkan Data →",
+            "Lanjut ke Bersihkan Data",
             type="primary",
             use_container_width=True,
             key="btn_go_preprocessing"

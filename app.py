@@ -858,19 +858,42 @@ with st.sidebar:
     """, unsafe_allow_html=True)
 
     # ── QUERY ────────────────────────────────────────────────────
+# ── QUERY ────────────────────────────────────────────────────
     crawler_query = os.getenv(
         "QUERY",
-        'komdigi (ongkir OR "gratis ongkir" OR "free ongkir")'
+        'komdigi (ongkir OR "gratis ongkir" OR "free ongkir") '
+        'OR "pembatasan gratis ongkir" OR "gratis ongkir dibatasi"'
     )
-    query_html = escape(crawler_query)
+
+    # Highlight keyword utama dengan warna biru
+    _QUERY_TERMS = [
+        "komdigi", "ongkir", "gratis ongkir", "free ongkir",
+        "pembatasan gratis ongkir", "gratis ongkir dibatasi",
+    ]
+    query_highlighted = escape(crawler_query)
+    for term in _QUERY_TERMS:
+        escaped_term = escape(term)
+        query_highlighted = query_highlighted.replace(
+            escaped_term,
+            f'<span style="color:#3b6cf7;font-weight:700;">{escaped_term}</span>',
+            1,
+        )
 
     st.markdown(f"""
     <div class="sidebar-card">
-        <div style="font-size:0.72rem;font-weight:800;color:#0f172a;margin-bottom:0.55rem;">
-            Query Aktif
+        <div style="font-size:0.72rem;font-weight:800;color:#0f172a;margin-bottom:0.5rem;">
+            🔍 Query Aktif
         </div>
-        <div style="font-size:0.74rem;color:#475569;line-height:1.8;word-break:break-word;">
-            {query_html}
+        <div style="font-size:0.71rem;color:#475569;line-height:1.9;
+                    word-break:break-word;font-family:monospace;">
+            {query_highlighted}
+        </div>
+        <div style="margin-top:0.6rem;padding-top:0.55rem;
+                    border-top:1px solid #f1f5f9;">
+            <div style="font-size:0.66rem;color:#94a3b8;line-height:1.6;">
+                Topik: kebijakan ongkir gratis &amp; Komdigi<br/>
+                Sumber: X (Twitter) via tweet-harvest
+            </div>
         </div>
     </div>
     """, unsafe_allow_html=True)
