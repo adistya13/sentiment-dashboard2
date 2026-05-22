@@ -21,14 +21,11 @@ from crawler import (
     AUTO_CRAWL_INTERVAL_HOURS,
     NRT_INTERVAL_MINUTES,
     auto_crawl_job,
+    activate_nrt_scheduler,
+    deactivate_nrt_scheduler,
+    is_nrt_enabled,
     ensure_scheduler_running,
 )
-
-
-# ═══════════════════════════════════════════════════════════
-#  AUTO-START SCHEDULER
-# ═══════════════════════════════════════════════════════════
-ensure_scheduler_running()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -181,39 +178,53 @@ def _render_crawling_styles():
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
-.block-container { padding-top: 1rem !important; }
+.block-container {
+    padding-top: 1rem !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+}
+
+.stApp {
+    background:
+        radial-gradient(circle at top left, #eef4ff 0%, transparent 25%),
+        radial-gradient(circle at top right, #f0fdf4 0%, transparent 20%),
+        #f8fafc;
+}
+
 [data-testid="stMainBlockContainer"] { padding-top: 1rem !important; }
-header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important; }
+header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important; overflow: visible !important; }
 
 section[data-testid="stMain"] * {
     font-family: 'Plus Jakarta Sans', sans-serif !important;
 }
 
-/* ── Cards ── */
 .crawl-card {
-    background: #ffffff;
-    border: 1px solid #e8edf5;
-    border-radius: 16px;
-    padding: 1.25rem 1.4rem;
-    box-shadow: 0 2px 12px rgba(15,23,42,0.05);
-    margin-bottom: 1.1rem;
-    transition: box-shadow 0.2s ease;
+    background: rgba(255,255,255,0.92);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(226,232,240,0.7);
+    border-radius: 20px;
+    padding: 1.35rem 1.45rem;
+    box-shadow: 0 4px 20px rgba(15,23,42,0.05), 0 1px 3px rgba(15,23,42,0.04);
+    margin-bottom: 1.15rem;
+    transition: all 0.22s ease;
 }
+
 .crawl-card:hover {
-    box-shadow: 0 6px 24px rgba(15,23,42,0.09);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 28px rgba(15,23,42,0.08), 0 2px 8px rgba(15,23,42,0.05);
 }
 
-/* ── Mode cards ── */
 .mode-card {
-    transition: transform 0.18s cubic-bezier(.34,1.56,.64,1), box-shadow 0.18s ease;
-    cursor: default;
-}
-.mode-card:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 10px 28px rgba(15,23,42,0.10) !important;
+    transition: all 0.22s ease;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
 }
 
-/* ── Metric pills ── */
+.mode-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px rgba(15,23,42,0.08) !important;
+}
+
 .metric-pill {
     border-radius: 14px;
     padding: 1rem 0.9rem;
@@ -223,7 +234,6 @@ section[data-testid="stMain"] * {
 }
 .metric-pill:hover { transform: translateY(-2px); }
 
-/* ── Buttons ── */
 .stButton > button {
     border-radius: 12px !important;
     font-weight: 700 !important;
@@ -237,14 +247,12 @@ section[data-testid="stMain"] * {
     box-shadow: 0 6px 18px rgba(59,108,247,0.15) !important;
 }
 
-/* ── Page header animation ── */
 .page-header-card { animation: fadeSlideIn 0.45s ease both; }
 @keyframes fadeSlideIn {
     from { opacity: 0; transform: translateY(-10px); }
     to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ── Status dot pulse ── */
 @keyframes pulse-green {
     0%,100% { box-shadow: 0 0 0 0 rgba(22,163,74,0.45); }
     50%      { box-shadow: 0 0 0 7px rgba(22,163,74,0); }
@@ -253,10 +261,14 @@ section[data-testid="stMain"] * {
     0%,100% { box-shadow: 0 0 0 0 rgba(59,108,247,0.45); }
     50%      { box-shadow: 0 0 0 7px rgba(59,108,247,0); }
 }
-.pulse-dot-green { animation: pulse-green 2s ease infinite; }
-.pulse-dot-blue  { animation: pulse-blue  2s ease infinite; }
+@keyframes pulse-orange {
+    0%,100% { box-shadow: 0 0 0 0 rgba(234,88,12,0.45); }
+    50%      { box-shadow: 0 0 0 7px rgba(234,88,12,0); }
+}
+.pulse-dot-green  { animation: pulse-green  2s ease infinite; }
+.pulse-dot-blue   { animation: pulse-blue   2s ease infinite; }
+.pulse-dot-orange { animation: pulse-orange 2s ease infinite; }
 
-/* ── Monitor table rows ── */
 .monitor-row {
     display: flex; justify-content: space-between;
     align-items: center; gap: 0.75rem;
@@ -266,14 +278,12 @@ section[data-testid="stMain"] * {
 .monitor-label { font-size: 0.78rem; color: #64748b; font-weight: 500; }
 .monitor-value { font-size: 0.8rem; font-weight: 700; text-align: right; flex-shrink: 0; }
 
-/* ── Stat number animation ── */
 @keyframes countUp {
     from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: translateY(0); }
 }
 .stat-num { animation: countUp 0.6s ease both; }
 
-/* ── Custom date panel ── */
 .st-key-custom_date_panel {
     background: #ffffff !important;
     border: 1px solid #e8edf5 !important;
@@ -305,11 +315,114 @@ section[data-testid="stMain"] * {
     margin-bottom: 0 !important;
 }
 
-/* ── Section divider ── */
 .section-divider {
     height: 1px;
     background: linear-gradient(90deg, transparent, #e2e8f0 30%, #e2e8f0 70%, transparent);
     margin: 1.5rem 0;
+}
+
+/* ── Page Header ph-* classes ── */
+.ph-card {
+    background: rgba(255,255,255,0.95);
+    border: 1px solid #e8edf5;
+    border-radius: 20px;
+    padding: 1.6rem 1.8rem 1.4rem;
+    margin-bottom: 1.2rem;
+    box-shadow: 0 2px 12px rgba(15,23,42,0.05);
+}
+.ph-top {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.1rem;
+    margin-bottom: 1.2rem;
+}
+.ph-icon {
+    width: 50px; height: 50px; flex-shrink: 0;
+    background: linear-gradient(135deg,#3b6cf7,#6366f1);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.4rem;
+    box-shadow: 0 4px 14px rgba(59,108,247,0.25);
+}
+.ph-title {
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
+}
+.ph-desc {
+    font-size: 0.82rem;
+    color: #64748b;
+    line-height: 1.75;
+    max-width: 860px;
+    margin: 0.4rem 0 0;
+}
+.ph-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 0.75rem;
+}
+.ph-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 0.71rem;
+    font-weight: 700;
+    border: 1px solid;
+}
+.ph-divider {
+    height: 1px;
+    background: #f1f5f9;
+    margin: 1.1rem 0;
+}
+.ph-chips {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin-bottom: 1.1rem;
+}
+.ph-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #f8fafc;
+    border: 1px solid #e8edf5;
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+.ph-chip-icon { font-size: 1.1rem; flex-shrink: 0; }
+.ph-chip-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 2px;
+}
+.ph-chip-value { font-size: 0.8rem; font-weight: 700; color: #1e293b; }
+
+/* ── Activation Gate ── */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+.activation-panel { animation: fadeIn 0.4s ease both; }
+
+/* ── Active Strip ── */
+.active-strip {
+    background: linear-gradient(135deg, #f0fdf4, #dcfce7);
+    border: 1px solid #86efac;
+    border-radius: 14px;
+    padding: 0.85rem 1.15rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 2px 8px rgba(22,163,74,0.08);
 }
 </style>
 """, unsafe_allow_html=True)
@@ -321,25 +434,193 @@ def _gap(size="md"):
     st.markdown(f'<div style="height:{h}px;"></div>', unsafe_allow_html=True)
 
 
+def _divider():
+    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+
+
 def _section_header(title, subtitle=""):
     sub_html = (
         f'<p style="font-size:0.74rem;color:#64748b;margin:3px 0 0;line-height:1.5;">{subtitle}</p>'
         if subtitle else ""
     )
     st.markdown(f"""
-<div style="background:#ffffff;border:1px solid #e8edf5;border-radius:12px;
-            padding:0.72rem 1.2rem;margin-bottom:0.9rem;
-            box-shadow:0 1px 6px rgba(15,23,42,0.04);">
-    <p style="font-size:0.88rem;font-weight:700;color:#0f172a;margin:0;">{title}</p>
+<div style="background:rgba(255,255,255,0.85);backdrop-filter:blur(10px);
+border:1px solid #e8edf5;border-radius:16px;padding:0.9rem 1.2rem;
+margin-bottom:1rem;box-shadow:0 2px 10px rgba(15,23,42,0.04);">
+    <p style="font-size:0.95rem;font-weight:800;color:#0f172a;margin:0;">{title}</p>
     {sub_html}
 </div>
 """, unsafe_allow_html=True)
 
 
-def _divider():
-    st.markdown('<div class="section-divider"></div>', unsafe_allow_html=True)
+# ═══════════════════════════════════════════════════════════
+#  PAGE HEADER
+# ═══════════════════════════════════════════════════════════
+
+def _render_page_header():
+    nrt = str(NRT_INTERVAL_MINUTES)
+
+    st.markdown(f"""
+<div class="ph-card">
+<div class="ph-top">
+<div class="ph-icon">&#128038;</div>
+<div style="flex:1;min-width:0;">
+<div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.45rem;">
+<span class="ph-title">Crawling Data Twitter &mdash; Komdigi &amp; Isu Ongkir</span>
+<span style="background:#dcfce7;border:1px solid #86efac;border-radius:999px;padding:4px 12px;font-size:0.68rem;font-weight:700;color:#15803d;display:inline-flex;align-items:center;gap:5px;white-space:nowrap;"><span class="pulse-dot-green" style="width:7px;height:7px;border-radius:50%;background:#16a34a;display:inline-block;"></span>Live Monitor</span>
+</div>
+<p class="ph-desc">Sistem ini memantau opini masyarakat Twitter/X mengenai <strong style="color:#334155;">kebijakan pembatasan gratis ongkir</strong> oleh <strong style="color:#334155;">Komdigi</strong>. Tweet dikumpulkan otomatis, dibersihkan melalui preprocessing Bahasa Indonesia, lalu dianalisis menggunakan model <strong style="color:#334155;">Naive Bayes</strong> untuk menentukan sentimen (<em>positif, negatif, atau netral</em>) secara near-realtime.</p>
+<div class="ph-tags" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:0.75rem;">
+<span class="ph-tag" style="background:#eef2ff;color:#3b6cf7;border-color:#c7d2fe;">&#128225; Auto Crawling</span>
+<span class="ph-tag" style="background:#f0fdf4;color:#15803d;border-color:#bbf7d0;">&#129302; Naive Bayes</span>
+<span class="ph-tag" style="background:#fff7ed;color:#c2410c;border-color:#fdba74;">&#9889; Near Realtime</span>
+<span class="ph-tag" style="background:#f5f3ff;color:#7c3aed;border-color:#ddd6fe;">&#128202; Dashboard Monitoring</span>
+</div>
+</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown(f"""
+<div class="ph-card" style="margin-top:-0.8rem;">
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;">
+<div class="ph-chip"><span class="ph-chip-icon">&#128260;</span><div><div class="ph-chip-label">Interval Crawling</div><div class="ph-chip-value">Setiap {nrt} menit</div></div></div>
+<div class="ph-chip"><span class="ph-chip-icon">&#128197;</span><div><div class="ph-chip-label">Jangkauan Data</div><div class="ph-chip-value">7 hari terakhir</div></div></div>
+<div class="ph-chip"><span class="ph-chip-icon">&#128451;</span><div><div class="ph-chip-label">Penyimpanan</div><div class="ph-chip-value">Database lokal</div></div></div>
+<div class="ph-chip"><span class="ph-chip-icon">&#129302;</span><div><div class="ph-chip-label">Model Prediksi</div><div class="ph-chip-value">Naive Bayes</div></div></div>
+</div>
+</div>
+""", unsafe_allow_html=True)
+
+    st.markdown("""
+<div class="ph-card" style="margin-top:-0.8rem;">
+<div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+<div style="display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;">
+<span style="font-size:0.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:0.07em;margin-right:4px;">&#128269; Query</span>
+<span style="background:#eef2ff;color:#3b6cf7;border:1px solid #c7d2fe;border-radius:999px;padding:4px 13px;font-size:0.72rem;font-weight:700;">komdigi</span>
+<span style="background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;border-radius:999px;padding:4px 13px;font-size:0.72rem;font-weight:700;">gratis ongkir</span>
+<span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;border-radius:999px;padding:4px 13px;font-size:0.72rem;font-weight:700;">free ongkir</span>
+<span style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:999px;padding:4px 13px;font-size:0.72rem;font-weight:700;">pembatasan ongkir</span>
+</div>
+<div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
+<span style="font-size:0.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:0.07em;margin-right:4px;">&#9881; Alur kerja</span>
+<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:0.71rem;color:#475569;font-weight:600;white-space:nowrap;">&#128038; Crawling tweet</span>
+<span style="color:#cbd5e1;font-size:0.8rem;">&#8594;</span>
+<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:0.71rem;color:#475569;font-weight:600;white-space:nowrap;">&#128451; Simpan ke database</span>
+<span style="color:#cbd5e1;font-size:0.8rem;">&#8594;</span>
+<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:0.71rem;color:#475569;font-weight:600;white-space:nowrap;">&#9985; Preprocessing teks</span>
+<span style="color:#cbd5e1;font-size:0.8rem;">&#8594;</span>
+<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:0.71rem;color:#475569;font-weight:600;white-space:nowrap;">&#129302; Prediksi sentimen</span>
+<span style="color:#cbd5e1;font-size:0.8rem;">&#8594;</span>
+<span style="display:inline-flex;align-items:center;gap:4px;background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;padding:5px 12px;font-size:0.71rem;color:#475569;font-weight:600;white-space:nowrap;">&#128202; Visualisasi hasil</span>
+</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
 
 
+# ═══════════════════════════════════════════════════════════
+#  NRT ACTIVATION GATE
+# ═══════════════════════════════════════════════════════════
+def _render_activation_gate():
+    items = [
+        f'Scheduler berjalan setiap <strong>{NRT_INTERVAL_MINUTES} menit</strong> di background',
+        'Mencakup tweet dalam <strong>7 hari terakhir</strong>',
+        'Tweet baru otomatis tersimpan ke database lokal',
+        'Crawl pertama dimulai <strong>segera</strong> setelah tombol diklik',
+    ]
+
+    grid_rows = ""
+    for item in items:
+        grid_rows += (
+            '<div style="display:flex;align-items:flex-start;gap:0.5rem;">'
+            '<span style="color:#16a34a;font-weight:700;flex-shrink:0;margin-top:1px;">\u2713</span>'
+            f'<span style="font-size:0.74rem;color:#44403c;line-height:1.55;">{item}</span>'
+            '</div>'
+        )
+
+    html = (
+        '<div style="background:linear-gradient(135deg,#fffbeb,#fef3c7);border:1.5px solid #fde68a;border-radius:20px;padding:2rem 2rem 1.6rem;margin-bottom:1rem;box-shadow:0 4px 24px rgba(234,179,8,0.1);">'
+        '<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.4rem;">'
+        '<div style="width:48px;height:48px;background:linear-gradient(135deg,#f59e0b,#d97706);border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.4rem;flex-shrink:0;box-shadow:0 4px 14px rgba(245,158,11,0.3);">\u26a1</div>'
+        '<div>'
+        '<div style="font-size:1rem;font-weight:800;color:#78350f;letter-spacing:-0.01em;">Pengambilan Data Otomatis Belum Aktif</div>'
+        f'<div style="font-size:0.75rem;color:#92400e;font-weight:500;margin-top:3px;line-height:1.5;">Aktifkan untuk mulai crawling tweet secara near-realtime setiap <strong>{NRT_INTERVAL_MINUTES} menit</strong>.</div>'
+        '</div>'
+        '</div>'
+        '<div style="background:rgba(255,255,255,0.65);border:1px solid #fde68a;border-radius:12px;padding:1rem 1.15rem;margin-bottom:1.25rem;">'
+        '<div style="font-size:0.67rem;font-weight:800;color:#b45309;text-transform:uppercase;letter-spacing:0.07em;margin-bottom:0.75rem;">Yang akan terjadi setelah aktivasi</div>'
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0.55rem 1.5rem;">'
+        + grid_rows +
+        '</div>'
+        '</div>'
+        '<div style="background:rgba(255,255,255,0.45);border:1px dashed #fbbf24;border-radius:10px;padding:0.65rem 1rem;">'
+        '<span style="font-size:0.7rem;color:#78350f;font-weight:500;line-height:1.65;">'
+        '\U0001f4a1 <strong>Catatan:</strong> Crawling aktif selama sesi aplikasi berjalan. '
+        'Data historis tetap tersimpan dan bisa dilihat di mode <em>7 Hari</em> atau <em>30 Hari</em> tanpa perlu mengaktifkan crawling.'
+        '</span>'
+        '</div>'
+        '</div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+
+    col_l, col_btn, col_r = st.columns([1, 2, 1])
+    with col_btn:
+        if st.button(
+            "\u26a1 Aktifkan Pengambilan Data Secara Otomatis",
+            type="primary",
+            use_container_width=True,
+            key="btn_activate_nrt",
+        ):
+            st.session_state.nrt_activated = True
+            st.session_state.nrt_explicitly_deactivated = False   # ← RESET FLAG
+            st.session_state.crawl_history_started_at = datetime.now(tz=timezone.utc)
+            activate_nrt_scheduler()
+            st.success("\u2705 Crawling otomatis berhasil diaktifkan! Crawl pertama akan segera dimulai.")
+            time.sleep(1.0)
+            st.rerun()
+
+    _gap("md")
+
+
+# ═══════════════════════════════════════════════════════════
+#  ACTIVE STRIP (setelah diaktifkan)
+# ═══════════════════════════════════════════════════════════
+def _render_active_strip():
+    col_info, col_btn = st.columns([3, 1], gap="medium")
+
+    with col_info:
+        st.markdown(f"""
+<div class="active-strip">
+    <div class="pulse-dot-green"
+         style="width:10px;height:10px;background:#16a34a;border-radius:50%;flex-shrink:0;"></div>
+    <div>
+        <span style="font-size:0.8rem;font-weight:700;color:#15803d;">
+            Crawling Otomatis Aktif
+        </span>
+        <span style="font-size:0.7rem;color:#166534;margin-left:0.5rem;">
+            &mdash; berjalan setiap <strong>{NRT_INTERVAL_MINUTES} menit</strong> di background
+        </span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
+    with col_btn:
+        _gap("xs")
+        if st.button(
+            "⏹ Nonaktifkan",
+            type="secondary",
+            use_container_width=True,
+            key="btn_deactivate_nrt",
+        ):
+            # Set semua flag nonaktif
+            st.session_state.nrt_activated = False
+            st.session_state.nrt_explicitly_deactivated = True   # ← FLAG BARU
+            st.session_state.pop("crawl_history_started_at", None)
+            deactivate_nrt_scheduler()
+            st.warning("⏹ Crawling otomatis dihentikan untuk sesi ini.")
+            time.sleep(0.9)
+            st.rerun()
 # ═══════════════════════════════════════════════════════════
 #  NRT STATUS BANNER
 # ═══════════════════════════════════════════════════════════
@@ -369,7 +650,7 @@ def _render_nrt_status_banner(sched_ok):
         title     = "Crawler Siap Dijalankan"
         desc      = (
             f"Scheduler otomatis aktif setiap <strong>{NRT_INTERVAL_MINUTES} menit</strong> "
-            f"sejak aplikasi pertama dibuka &mdash; tidak perlu terminal terpisah."
+            f"sejak diaktifkan &mdash; tidak perlu terminal terpisah."
         )
         badge = "&#9900; STANDBY"
 
@@ -378,7 +659,8 @@ def _render_nrt_status_banner(sched_ok):
             padding:1rem 1.3rem;margin-bottom:1rem;
             display:flex;align-items:center;gap:1rem;
             box-shadow:0 2px 8px rgba(15,23,42,0.04);">
-    <div class="{dot_cls}" style="width:12px;height:12px;background:{dot_color};
+    <div class="{dot_cls}"
+         style="width:12px;height:12px;background:{dot_color};
                 border-radius:50%;flex-shrink:0;"></div>
     <div style="flex:1;">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.3rem;">
@@ -412,11 +694,11 @@ def _render_monitoring_panel(last_log, last_dt, sched_ok):
         )
         latest_crawled = df_stats["crawled_at"].max() if not df_stats.empty else None
     except Exception:
-        total_db = 0
-        tweet_today = 0
+        total_db       = 0
+        tweet_today    = 0
         latest_crawled = None
 
-    last_log_dt   = last_dt
+    last_log_dt = last_dt
     if last_log_dt is None and last_log:
         last_log_dt = parse_log_time(last_log.get("timestamp"))
 
@@ -424,9 +706,9 @@ def _render_monitoring_panel(last_log, last_dt, sched_ok):
     if final_last_dt is None:
         final_last_dt = to_user_local_datetime(latest_crawled)
 
-    last_crawl_str = "Belum pernah"
-    next_crawl_str = "Belum terjadwal"
-    countdown_str  = "Menunggu crawl pertama..."
+    last_crawl_str      = "Belum pernah"
+    next_crawl_str      = "Belum terjadwal"
+    countdown_str       = "Menunggu crawl pertama..."
     monitoring_time_str = format_dt(now)
 
     if final_last_dt is not None:
@@ -454,7 +736,6 @@ def _render_monitoring_panel(last_log, last_dt, sched_ok):
 
     col_a, col_b = st.columns(2, gap="medium")
 
-    # ── Left card: sistem crawling ──
     left_rows = [
         ("Interval crawling",  f"{NRT_INTERVAL_MINUTES} menit", "#3b6cf7"),
         ("Jangkauan data",     "7 hari terakhir",                "#3b6cf7"),
@@ -490,12 +771,11 @@ def _render_monitoring_panel(last_log, last_dt, sched_ok):
             unsafe_allow_html=True,
         )
 
-    # ── Right card: ringkasan dataset ──
     right_rows = [
-        ("Update terakhir",        last_crawl_str,           "#0f172a"),
-        ("Countdown berikutnya",   countdown_str,             "#16a34a"),
-        ("Tweet masuk hari ini",   f"{tweet_today:,} tweet",  "#3b6cf7"),
-        ("Total dataset",          f"{total_db:,} tweet",     "#0f172a"),
+        ("Update terakhir",      last_crawl_str,           "#0f172a"),
+        ("Countdown berikutnya", countdown_str,             "#16a34a"),
+        ("Tweet masuk hari ini", f"{tweet_today:,} tweet",  "#3b6cf7"),
+        ("Total dataset",        f"{total_db:,} tweet",     "#0f172a"),
     ]
 
     rows_html_b = ""
@@ -555,7 +835,7 @@ def _render_metrics(total, days, earliest, latest, filter_label, basis_label):
     c1, c2, c3, c4 = st.columns(4)
     for col, (icon, bg, color, dark, border_c, label, val, sub) in zip([c1, c2, c3, c4], pills):
         with col:
-            fs = "1.1rem" if len(str(val)) > 10 else "1.55rem"
+            fs = "1.45rem" if len(str(val)) > 10 else "2rem"
             st.markdown(
                 f'<div class="metric-pill" style="background:{bg};border:1px solid {border_c};'
                 f'box-shadow:0 2px 10px {color}18;">'
@@ -665,7 +945,6 @@ def _render_charts(df, filter_label, date_col, chart_label, dt_start, dt_end):
     )
     st.plotly_chart(fig_bar, use_container_width=True, config={"displayModeBar": False})
 
-    # ── Legend ──
     legend_items = [("#1d4ed8", "Tertinggi"), ("#3b6cf7", "Normal")]
     if min_cnt > 0 and min_cnt != max_cnt:
         legend_items.insert(1, ("#a78bfa", "Terendah"))
@@ -683,7 +962,6 @@ def _render_charts(df, filter_label, date_col, chart_label, dt_start, dt_end):
         unsafe_allow_html=True
     )
 
-    # ── Insight cards ──
     pc1, pc2, pc3 = st.columns(3, gap="small")
 
     def _date_pills(days_list, color, max_show=4):
@@ -830,157 +1108,17 @@ def get_filtered_data(df_all):
     filter_label = f"{dt_start.strftime('%d/%m/%Y')} s/d {dt_end.strftime('%d/%m/%Y')}"
 
     return {
-        "df": df,
-        "date_col": date_col,
+        "df":           df,
+        "date_col":     date_col,
         "mode_display": mode_display,
-        "mode_color": mode_color,
-        "mode_icon": mode_icon,
+        "mode_color":   mode_color,
+        "mode_icon":    mode_icon,
         "filter_label": filter_label,
-        "dt_start": dt_start,
-        "dt_end": dt_end,
-        "basis_label": basis_label,
-        "chart_label": chart_label,
+        "dt_start":     dt_start,
+        "dt_end":       dt_end,
+        "basis_label":  basis_label,
+        "chart_label":  chart_label,
     }
-
-
-# ═══════════════════════════════════════════════════════════
-#  PAGE HEADER  (dipecah jadi beberapa st.markdown() kecil)
-# ═══════════════════════════════════════════════════════════
-
-def _render_page_header():
-    # Bangun semua bagian dalam Python dulu, baru render SEKALI
-    chip_data = [
-        ("&#128260;", "Interval crawling", f"Setiap {NRT_INTERVAL_MINUTES} menit"),
-        ("&#128197;", "Jangkauan data",    "7 hari terakhir"),
-        ("&#128451;", "Penyimpanan",       "Database lokal"),
-        ("&#129302;", "Model prediksi",    "Naive Bayes"),
-    ]
-    chips_html = "".join(
-        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;'
-        'padding:0.75rem 1rem;display:flex;align-items:center;gap:10px;">'
-        f'<span style="font-size:1.1rem;flex-shrink:0;">{ico}</span>'
-        '<div>'
-        f'<div style="font-size:0.63rem;color:#94a3b8;font-weight:700;'
-        f'text-transform:uppercase;letter-spacing:0.06em;margin-bottom:3px;">{lbl}</div>'
-        f'<div style="font-size:0.84rem;font-weight:700;color:#0f172a;">{val}</div>'
-        '</div></div>'
-        for ico, lbl, val in chip_data
-    )
-
-    PIPELINE_STEPS = [
-        ("&#128038;", "Crawling tweet"),
-        ("&#128451;", "Simpan ke database"),
-        ("&#129529;", "Preprocessing teks"),
-        ("&#129302;", "Prediksi sentimen"),
-        ("&#128202;", "Visualisasi hasil"),
-    ]
-    pipeline_steps_html = " ".join(
-        (
-            f'<span style="display:inline-flex;align-items:center;gap:5px;'
-            f'background:#f1f5f9;border:1px solid #e2e8f0;border-radius:8px;'
-            f'padding:5px 13px;font-size:0.73rem;color:#475569;white-space:nowrap;">'
-            f'{icon}&nbsp;{label}</span>'
-            + (
-                '<span style="color:#cbd5e1;font-size:0.85rem;margin:0 2px;">&#8594;</span>'
-                if i < len(PIPELINE_STEPS) - 1 else ""
-            )
-        )
-        for i, (icon, label) in enumerate(PIPELINE_STEPS)
-    )
-
-    html = (
-        # ── outer card ──
-        '<div style="background:#ffffff;border:1px solid #e2e8f0;border-radius:20px;'
-        'padding:1.6rem 1.8rem 1.4rem;margin-bottom:1.5rem;'
-        'box-shadow:0 4px 24px rgba(15,23,42,0.07);">'
-
-        # ── row 1: icon + title + description ──
-        '<div style="display:flex;align-items:flex-start;gap:1.1rem;margin-bottom:1.4rem;">'
-
-        # icon
-        '<div style="width:54px;height:54px;flex-shrink:0;'
-        'background:linear-gradient(135deg,#3b6cf7,#6366f1);border-radius:15px;'
-        'display:flex;align-items:center;justify-content:center;font-size:1.55rem;'
-        'box-shadow:0 6px 18px rgba(59,108,247,0.28);">&#128038;</div>'
-
-        # title block
-        '<div style="flex:1;min-width:0;padding-top:3px;">'
-        '<div style="display:flex;align-items:center;gap:0.65rem;margin-bottom:6px;flex-wrap:wrap;">'
-        '<h2 style="font-size:1.15rem;font-weight:800;color:#0f172a;'
-        'margin:0;letter-spacing:-0.02em;line-height:1.25;">'
-        'Crawling Data Twitter &mdash; Komdigi &amp; Isu Ongkir'
-        '</h2>'
-        '<span style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:999px;'
-        'padding:3px 11px;font-size:0.68rem;font-weight:700;color:#16a34a;'
-        'display:inline-flex;align-items:center;gap:5px;white-space:nowrap;">'
-        '<span class="pulse-dot-green" style="width:6px;height:6px;border-radius:50%;'
-        'background:#16a34a;display:inline-block;"></span>'
-        'Live Monitor'
-        '</span>'
-        '</div>'
-        '<p style="font-size:0.815rem;color:#64748b;margin:0;line-height:1.75;">'
-        'Dashboard analisis sentimen tweet seputar '
-        '<strong style="color:#334155;">kebijakan ongkos kirim gratis</strong> dan '
-        '<strong style="color:#334155;">Komdigi</strong>. '
-        'Sistem mengumpulkan tweet otomatis, menyimpan ke database lokal, '
-        'membersihkan teks Bahasa Indonesia, lalu memprediksi sentimen '
-        '(<em>positif / negatif / netral</em>) via model '
-        '<strong style="color:#334155;">Naive Bayes</strong> '
-        '&mdash; near-realtime tanpa intervensi manual.'
-        '</p>'
-        '</div>'
-        '</div>'   # end row 1
-
-        # ── divider ──
-        '<div style="height:1px;background:#f1f5f9;margin-bottom:1.2rem;"></div>'
-
-        # ── row 2: chips ──
-        f'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:1.2rem;">'
-        f'{chips_html}'
-        '</div>'
-
-        # ── divider ──
-        '<div style="height:1px;background:#f1f5f9;margin-bottom:1.2rem;"></div>'
-
-        # ── row 3: query box ──
-        '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;'
-        'padding:0.9rem 1.1rem;margin-bottom:1.2rem;">'
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
-        '<span style="font-size:0.65rem;font-weight:800;color:#94a3b8;'
-        'text-transform:uppercase;letter-spacing:0.08em;">&#128269; Query pencarian aktif</span>'
-        '<span style="background:#eef2ff;color:#3b6cf7;border-radius:999px;'
-        'font-size:0.65rem;font-weight:700;padding:2px 9px;border:1px solid #c7d7fd;">'
-        'Twitter / X Search'
-        '</span>'
-        '</div>'
-        '<div style="font-family:\'Fira Mono\',\'Courier New\',monospace;font-size:0.8rem;'
-        'color:#334155;line-height:2;word-break:break-word;">'
-        '<span style="color:#3b6cf7;font-weight:700;">komdigi</span> '
-        '(<span style="color:#3b6cf7;font-weight:700;">ongkir</span> OR '
-        '<span style="color:#3b6cf7;font-weight:700;">&quot;gratis ongkir&quot;</span> OR '
-        '<span style="color:#3b6cf7;font-weight:700;">&quot;free ongkir&quot;</span>) OR '
-        '<span style="color:#3b6cf7;font-weight:700;">&quot;pembatasan gratis ongkir&quot;</span> OR '
-        '<span style="color:#3b6cf7;font-weight:700;">&quot;gratis ongkir dibatasi&quot;</span>'
-        '</div>'
-        '<div style="margin-top:9px;padding-top:9px;border-top:1px solid #e8edf5;'
-        'font-size:0.7rem;color:#94a3b8;line-height:1.6;">'
-        'Mencakup variasi: <em>ongkir, gratis ongkir, free ongkir</em>'
-        ' &mdash; termasuk konteks pembatasan subsidi ongkir oleh Komdigi.'
-        '</div>'
-        '</div>'   # end query box
-
-        # ── row 4: pipeline ──
-        '<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">'
-        '<span style="font-size:0.63rem;font-weight:800;color:#94a3b8;'
-        'text-transform:uppercase;letter-spacing:0.08em;margin-right:8px;white-space:nowrap;">'
-        '&#9881; Alur kerja</span>'
-        f'{pipeline_steps_html}'
-        '</div>'
-
-        '</div>'   # end outer card
-    )
-
-    st.markdown(html, unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -998,7 +1136,33 @@ def show():
     if "filter_end_date" not in st.session_state:
         st.session_state.filter_end_date = today
 
-    # ── Page Header ──────────────────────────────────────────────
+    # ── State aktivasi NRT ─────────────────────────────────────────────────
+    from crawler import load_nrt_activation, ensure_scheduler_running as _ensure_sched
+
+    # Inisialisasi pertama kali sesi dimulai
+    if "nrt_activated" not in st.session_state:
+        was_activated = load_nrt_activation()
+        # Jika file persist bilang aktif tapi user sudah eksplisit nonaktifkan → ikut flag
+        explicitly_off_init = st.session_state.get("nrt_explicitly_deactivated", False)
+        if was_activated and not explicitly_off_init:
+            st.session_state.nrt_activated = True
+            from crawler import activate_nrt_scheduler as _activate
+            _activate()
+        else:
+            st.session_state.nrt_activated = False
+
+    # Sinkronisasi: _scheduler_started sudah dijaga oleh app.py (False jika explicitly_off)
+    # Cukup mirror nilainya — tidak perlu logika tambahan
+    explicitly_off = st.session_state.get("nrt_explicitly_deactivated", False)
+    if explicitly_off:
+        st.session_state.nrt_activated = False
+    elif st.session_state.get("_scheduler_started", False):
+        if not st.session_state.get("nrt_activated", False):
+            st.session_state.nrt_activated = True
+            if "crawl_history_started_at" not in st.session_state:
+                st.session_state.crawl_history_started_at = datetime.now(tz=timezone.utc)
+
+    # ── Page Header ───────────────────────────────────────────────
     _render_page_header()
 
     # ── Mode Selector ─────────────────────────────────────────────
@@ -1049,10 +1213,10 @@ def show():
                 st.session_state.analysis_mode = mode_key
                 st.rerun()
 
-            bg     = cfg["gradient"] if active else "#ffffff"
-            color  = cfg["color"]    if active else "#94a3b8"
-            dark   = cfg["dark"]     if active else "#475569"
-            shadow = f"0 4px 16px {cfg['border']}55" if active else "0 1px 4px rgba(15,23,42,0.04)"
+            bg           = cfg["gradient"] if active else "#ffffff"
+            color        = cfg["color"]    if active else "#94a3b8"
+            dark         = cfg["dark"]     if active else "#475569"
+            shadow       = f"0 4px 16px {cfg['border']}55" if active else "0 1px 4px rgba(15,23,42,0.04)"
             border_style = f"2px solid {cfg['color']}" if active else "1.5px solid #e8edf5"
             icon_shadow  = f"0 4px 10px {cfg['border']}88" if active else "none"
             icon_bg      = "white" if active else "#f1f5f9"
@@ -1080,7 +1244,7 @@ def show():
 
     _gap("md")
 
-    # ── Load data ─────────────────────────────────────────────────
+    # ── Load data ──────────────────────────────────────────────────
     try:
         df_all = pd.read_sql("SELECT * FROM tweets ORDER BY created_at DESC", engine)
     except Exception as e:
@@ -1094,7 +1258,7 @@ def show():
     df_all["created_at"] = parse_dt(df_all["created_at"])
     df_all["crawled_at"] = parse_crawled_dt(df_all["crawled_at"])
 
-    # ── Custom Date Picker ────────────────────────────────────────
+    # ── Custom Date Picker ─────────────────────────────────────────
     if st.session_state.analysis_mode == "custom":
         df_check = df_all.dropna(subset=["created_at"]).copy()
         if not df_check.empty:
@@ -1151,139 +1315,158 @@ def show():
                         st.rerun()
 
     # ═══════════════════════════════════════════════════════════
-    #  MODE: TWEET HARI INI (captured)
+    #  MODE: HARI INI (captured)
     # ═══════════════════════════════════════════════════════════
     if st.session_state.analysis_mode == "captured":
-        st_autorefresh(interval=1000, key="crawler_monitor_refresh")
 
-        logs      = get_auto_crawl_logs(5)
-        last_log  = logs[0] if logs else None
-        sched_ok  = is_crawler_service_active(logs)
-        last_dt   = parse_log_time(last_log.get("timestamp")) if last_log else None
+        nrt_activated = st.session_state.get("nrt_activated", False)
 
-        _render_nrt_status_banner(sched_ok)
-        _gap("sm")
-        _render_monitoring_panel(last_log, last_dt, sched_ok)
-        _gap("md")
+        if not nrt_activated:
+            # ── Belum diaktifkan: tampilkan activation gate ───────
+            _render_activation_gate()
 
-        # ── Crawl History ──────────────────────────────────────
-        visible_logs = get_visible_crawl_logs(logs)
-        if visible_logs:
-            rows = []
-            for idx, log in enumerate(visible_logs, start=1):
-                status      = log.get("status", "")
-                total_saved = int(log.get("total_saved") or 0)
-                error_msg   = log.get("error")
-                try:
-                    crawl_time = format_dt(
-                        parse_dt(pd.Series([parse_log_time(log.get("timestamp"))])).iloc[0]
-                    )
-                except Exception:
-                    crawl_time = log.get("timestamp", "-") or "-"
+        else:
+            # ── Sudah diaktifkan: pastikan thread scheduler hidup ─
+            if is_nrt_enabled():
+                ensure_scheduler_running()
 
-                if status == "success":
-                    status_label = "Berhasil"
-                    note = (
-                        f"{total_saved:,} tweet baru tersimpan"
-                        if total_saved > 0
-                        else "Crawling berhasil, tidak ada tweet baru"
-                    )
-                else:
-                    status_label = "Gagal"
-                    note = error_msg or "Terjadi kesalahan saat crawling"
+            # Auto-refresh setiap 1 detik untuk countdown live
+            st_autorefresh(interval=1000, key="crawler_monitor_refresh")
 
-                rows.append({
-                    "No": idx,
-                    "Waktu Crawl": crawl_time,
-                    "Status": status_label,
-                    "Tweet Baru": total_saved,
-                    "Keterangan": note,
-                })
+            logs     = get_auto_crawl_logs(5)
+            last_log = logs[0] if logs else None
+            sched_ok = is_crawler_service_active(logs)
+            last_dt  = parse_log_time(last_log.get("timestamp")) if last_log else None
+
+            # Strip status aktif + tombol nonaktifkan
+            _render_active_strip()
+
+            # Banner status crawler
+            _render_nrt_status_banner(sched_ok)
+            _gap("sm")
+
+            # Panel monitoring
+            _render_monitoring_panel(last_log, last_dt, sched_ok)
+            _gap("md")
+
+            # Riwayat crawl
+            visible_logs = get_visible_crawl_logs(logs)
+            if visible_logs:
+                rows = []
+                for idx, log in enumerate(visible_logs, start=1):
+                    status      = log.get("status", "")
+                    total_saved = int(log.get("total_saved") or 0)
+                    error_msg   = log.get("error")
+                    try:
+                        crawl_time = format_dt(
+                            parse_dt(pd.Series([parse_log_time(log.get("timestamp"))])).iloc[0]
+                        )
+                    except Exception:
+                        crawl_time = log.get("timestamp", "-") or "-"
+
+                    if status == "success":
+                        status_label = "Berhasil"
+                        note = (
+                            f"{total_saved:,} tweet baru tersimpan"
+                            if total_saved > 0
+                            else "Crawling berhasil, tidak ada tweet baru"
+                        )
+                    else:
+                        status_label = "Gagal"
+                        note = error_msg or "Terjadi kesalahan saat crawling"
+
+                    rows.append({
+                        "No":          idx,
+                        "Waktu Crawl": crawl_time,
+                        "Status":      status_label,
+                        "Tweet Baru":  total_saved,
+                        "Keterangan":  note,
+                    })
+
+                _section_header(
+                    "&#128336; Riwayat Crawling Otomatis",
+                    f"{len(rows)} aktivitas terbaru &middot; interval {NRT_INTERVAL_MINUTES} menit"
+                )
+                _gap("xs")
+                render_standard_table(
+                    pd.DataFrame(rows),
+                    height=300, min_width=760,
+                    right_align=["Tweet Baru"],
+                    badge_columns=["Status"],
+                    nowrap=["No", "Waktu Crawl", "Status"],
+                    wide_columns=["Keterangan"],
+                    column_widths={
+                        "No": "56px", "Waktu Crawl": "160px",
+                        "Status": "138px", "Tweet Baru": "118px", "Keterangan": "320px",
+                    },
+                )
+            else:
+                st.markdown(
+                    '<div class="crawl-card" style="text-align:center;padding:2rem;">'
+                    '<div style="font-size:2rem;margin-bottom:0.75rem;">&#9203;</div>'
+                    '<div style="font-size:0.88rem;font-weight:700;color:#334155;margin-bottom:0.3rem;">'
+                    'Menunggu Crawl Pertama</div>'
+                    f'<div style="font-size:0.77rem;color:#64748b;">'
+                    f'Riwayat akan muncul setelah crawl otomatis pertama selesai '
+                    f'(maks. {NRT_INTERVAL_MINUTES} menit sejak aktivasi)'
+                    f'</div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+
+            _gap("lg")
+
+            # Tweet yang diambil bot hari ini
+            today_start = datetime.combine(today, datetime.min.time())
+            today_end   = datetime.combine(today, datetime.max.time().replace(microsecond=0))
+
+            bot_df = df_all.copy()
+            if "crawl_type" in bot_df.columns:
+                bot_df = bot_df[bot_df["crawl_type"].fillna("").str.lower().eq("realtime")].copy()
+
+            bot_df = bot_df.dropna(subset=["crawled_at"])
+            bot_df = bot_df[
+                (bot_df["crawled_at"] >= pd.Timestamp(today_start)) &
+                (bot_df["crawled_at"] <= pd.Timestamp(today_end))
+            ].sort_values("crawled_at", ascending=False)
 
             _section_header(
-                "&#128336; Riwayat Crawling Otomatis",
-                f"{len(rows)} aktivitas terbaru &middot; interval {NRT_INTERVAL_MINUTES} menit"
+                "&#129302; Tweet yang Diambil Bot Hari Ini",
+                "Semua tweet yang berhasil disimpan crawler hari ini"
             )
             _gap("xs")
-            render_standard_table(
-                pd.DataFrame(rows),
-                height=300, min_width=760,
-                right_align=["Tweet Baru"],
-                badge_columns=["Status"],
-                nowrap=["No", "Waktu Crawl", "Status"],
-                wide_columns=["Keterangan"],
-                column_widths={
-                    "No": "56px", "Waktu Crawl": "160px",
-                    "Status": "138px", "Tweet Baru": "118px", "Keterangan": "320px",
-                },
-            )
-        else:
-            st.markdown(
-                '<div class="crawl-card" style="text-align:center;padding:2rem;">'
-                '<div style="font-size:2rem;margin-bottom:0.75rem;">&#9203;</div>'
-                '<div style="font-size:0.88rem;font-weight:700;color:#334155;margin-bottom:0.3rem;">'
-                'Menunggu Crawl Pertama</div>'
-                f'<div style="font-size:0.77rem;color:#64748b;">'
-                f'Riwayat akan muncul setelah crawl otomatis pertama selesai '
-                f'(maks. {NRT_INTERVAL_MINUTES} menit sejak aplikasi dibuka)'
-                f'</div>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
 
-        _gap("lg")
-
-        # ── Tweet yang dicrawl bot hari ini ───────────────────
-        today_start = datetime.combine(today, datetime.min.time())
-        today_end   = datetime.combine(today, datetime.max.time().replace(microsecond=0))
-
-        bot_df = df_all.copy()
-        if "crawl_type" in bot_df.columns:
-            bot_df = bot_df[bot_df["crawl_type"].fillna("").str.lower().eq("realtime")].copy()
-
-        bot_df = bot_df.dropna(subset=["crawled_at"])
-        bot_df = bot_df[
-            (bot_df["crawled_at"] >= pd.Timestamp(today_start)) &
-            (bot_df["crawled_at"] <= pd.Timestamp(today_end))
-        ].sort_values("crawled_at", ascending=False)
-
-        _section_header(
-            "&#129302; Tweet yang Diambil Bot Hari Ini",
-            "Semua tweet yang berhasil disimpan crawler hari ini"
-        )
-        _gap("xs")
-
-        if bot_df.empty:
-            st.markdown(
-                '<div class="crawl-card" style="text-align:center;padding:2rem;">'
-                '<div style="font-size:2rem;margin-bottom:0.75rem;">&#128038;</div>'
-                '<div style="font-size:0.88rem;font-weight:700;color:#334155;margin-bottom:0.3rem;">'
-                'Belum Ada Tweet Hari Ini</div>'
-                '<div style="font-size:0.77rem;color:#64748b;">'
-                'Tweet baru akan muncul setelah crawl berikutnya selesai'
-                '</div>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-        else:
-            bot_disp = bot_df.head(100).copy()
-            bot_disp["Tanggal Tweet"]   = bot_disp["created_at"].apply(format_dt)
-            bot_disp["Waktu Bot Ambil"] = bot_disp["crawled_at"].apply(format_dt)
-            render_standard_table(
-                bot_disp[["tweet_id", "text", "Tanggal Tweet", "Waktu Bot Ambil"]].rename(
-                    columns={"tweet_id": "ID Tweet", "text": "Isi Tweet"}
-                ),
-                height=340, min_width=920,
-                nowrap=["ID Tweet", "Tanggal Tweet", "Waktu Bot Ambil"],
-                wide_columns=["Isi Tweet"],
-                column_widths={
-                    "ID Tweet": "170px", "Isi Tweet": "430px",
-                    "Tanggal Tweet": "150px", "Waktu Bot Ambil": "160px",
-                },
-            )
-            st.caption(
-                f"Menampilkan {len(bot_disp):,} dari {len(bot_df):,} tweet yang disimpan bot hari ini"
-            )
+            if bot_df.empty:
+                st.markdown(
+                    '<div class="crawl-card" style="text-align:center;padding:2rem;">'
+                    '<div style="font-size:2rem;margin-bottom:0.75rem;">&#128038;</div>'
+                    '<div style="font-size:0.88rem;font-weight:700;color:#334155;margin-bottom:0.3rem;">'
+                    'Belum Ada Tweet Hari Ini</div>'
+                    '<div style="font-size:0.77rem;color:#64748b;">'
+                    'Tweet baru akan muncul setelah crawl berikutnya selesai'
+                    '</div>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                bot_disp = bot_df.head(100).copy()
+                bot_disp["Tanggal Tweet"]   = bot_disp["created_at"].apply(format_dt)
+                bot_disp["Waktu Bot Ambil"] = bot_disp["crawled_at"].apply(format_dt)
+                render_standard_table(
+                    bot_disp[["tweet_id", "text", "Tanggal Tweet", "Waktu Bot Ambil"]].rename(
+                        columns={"tweet_id": "ID Tweet", "text": "Isi Tweet"}
+                    ),
+                    height=340, min_width=920,
+                    nowrap=["ID Tweet", "Tanggal Tweet", "Waktu Bot Ambil"],
+                    wide_columns=["Isi Tweet"],
+                    column_widths={
+                        "ID Tweet": "170px", "Isi Tweet": "430px",
+                        "Tanggal Tweet": "150px", "Waktu Bot Ambil": "160px",
+                    },
+                )
+                st.caption(
+                    f"Menampilkan {len(bot_disp):,} dari {len(bot_df):,} tweet yang disimpan bot hari ini"
+                )
 
     # ═══════════════════════════════════════════════════════════
     #  FILTERED DATA — tampil di semua mode
@@ -1308,7 +1491,6 @@ def show():
 
     _divider()
 
-    # ── Active Filter Banner ──────────────────────────────────
     total = len(df)
     st.markdown(
         f'<div style="display:flex;align-items:center;gap:0.9rem;'
@@ -1359,7 +1541,6 @@ def show():
         )
         return
 
-    # ── Chart ─────────────────────────────────────────────────
     st.markdown(
         f'<div class="crawl-card" style="padding-bottom:0.4rem;">'
         f'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.1rem;">'
@@ -1378,7 +1559,6 @@ def show():
 
     _render_charts(df, filter_label, date_col, chart_label, dt_start, dt_end)
 
-    # ── Tabel ─────────────────────────────────────────────────
     display_limit = 100
     _section_header(
         "&#128203; Daftar Tweet yang Terkumpul",
@@ -1405,7 +1585,6 @@ def show():
     st.caption(f"Menampilkan {len(df_disp):,} dari {total:,} tweet")
     _gap("sm")
 
-    # ── Actions ───────────────────────────────────────────────
     c_dl, c_nav = st.columns(2)
     with c_dl:
         st.download_button(

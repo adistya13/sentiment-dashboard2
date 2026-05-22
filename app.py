@@ -26,14 +26,10 @@ except Exception:
 
 init_db()
 
-# ── Auto-start background crawler scheduler ──────────────────────────────────
-# Dipanggil sekali saat app pertama dijalankan.
-# Scheduler berjalan sebagai daemon thread — tidak perlu terminal terpisah.
-try:
-    from crawler import ensure_scheduler_running
-    ensure_scheduler_running()
-except Exception as _e:
-    print(f"[app] Gagal memulai scheduler: {_e}")
+# ── Auto-start background crawler scheduler (disabled) ───────────────────
+# Scheduler NRT hanya boleh berjalan setelah user menekan tombol aktivasi
+# pada mode "Hari Ini" (captured) agar sesuai kebutuhan (NRT dimulai manual).
+
 
 st.set_page_config(
     page_title="Dashboard Sentimen Twitter",
@@ -164,8 +160,15 @@ def _check_crawler_alive():
         and now - heartbeat_at <= threshold
     )
 
+# Hanya update _scheduler_started dari database jika user TIDAK sedang nonaktifkan eksplisit
+_raw_alive = _check_crawler_alive()
+explicitly_off = st.session_state.get("nrt_explicitly_deactivated", False)
 
-st.session_state._scheduler_started = _check_crawler_alive()
+if explicitly_off:
+    # User sudah klik nonaktifkan — override database state, paksa False
+    st.session_state._scheduler_started = False
+else:
+    st.session_state._scheduler_started = _raw_alive
 
 try:
     from crawler import NRT_INTERVAL_MINUTES
@@ -190,8 +193,7 @@ st.markdown("""
     --bg: #f8fafc;
     --card: #ffffff;
 }
-
-* {
+html, body, [class*="css"], .stApp {
     font-family: 'Plus Jakarta Sans', sans-serif !important;
     box-sizing: border-box;
 }
@@ -226,7 +228,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"] {
 }
 
 .main > div {
-    padding: 1.5rem 2rem !important;
+    padding: 4.3rem 2rem 1.5rem 2rem !important;
 }
 
 [data-testid="stSidebar"] {
@@ -683,26 +685,191 @@ span:not([style]) {
     box-shadow: 0 2px 6px rgba(15,23,42,0.05);
 }
 
-#MainMenu, footer, header { visibility: hidden !important; }
+/* =====================================================
+   CLEAN STREAMLIT HEADER + SIDEBAR
+===================================================== */
 
-[data-testid="stHeader"] { background: transparent !important; }
+/* Hide bawaan Streamlit */
+#MainMenu {
+    visibility: hidden !important;
+}
+
+footer {
+    visibility: hidden !important;
+}
+
+
+
+/* =====================================================
+   HEADER
+===================================================== */
+
+[data-testid="stHeader"] {
+    background: rgba(248,250,252,0.96) !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    backdrop-filter: blur(8px) !important;
+}
+
+/* =====================================================
+   SIDEBAR
+===================================================== */
+
+[data-testid="stSidebar"] {
+
+    background: linear-gradient(
+        180deg,
+        #ffffff 0%,
+        #f8fafc 100%
+    ) !important;
+
+    border-right: 1px solid #e2e8f0 !important;
+}
+
+/* =====================================================
+   MAIN CONTENT
+===================================================== */
+
+.main > div {
+
+    padding-top: 4.4rem !important;
+}
+
+/* =====================================================
+   SAFE SIDEBAR TOGGLE
+===================================================== */
+/* =====================================================
+   SAFE SIDEBAR TOGGLE
+===================================================== */
+
+[data-testid="stHeader"],
+header[data-testid="stHeader"],
+header[data-testid="stHeader"] > div {
+    overflow: visible !important;
+}
+
+[data-testid="collapsedControl"] {
+    position: fixed !important;
+    top: 10px !important;
+    left: 10px !important;
+    z-index: 2147483647 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: all !important;
+    width: 44px !important;
+    height: 44px !important;
+    overflow: visible !important;
+    clip: unset !important;
+    clip-path: none !important;
+}
+
+[data-testid="collapsedControl"] button {
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 50% !important;
+    background: linear-gradient(135deg, #3b6cf7, #5b7cfa) !important;
+    border: 2px solid #2d59d1 !important;
+    box-shadow: 0 4px 16px rgba(59,108,247,0.5) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    padding: 0 !important;
+    overflow: visible !important;
+}
+
+[data-testid="collapsedControl"] button svg {
+    width: 20px !important;
+    height: 20px !important;
+    fill: #ffffff !important;
+    color: #ffffff !important;
+    stroke: #ffffff !important;
+    flex-shrink: 0 !important;
+}
+
+[data-testid="collapsedControl"] button svg * {
+    fill: #ffffff !important;
+    stroke: #ffffff !important;
+}
+
+[data-testid="collapsedControl"] button:hover {
+    background: #2d59d1 !important;
+    transform: scale(1.1) !important;
+    box-shadow: 0 6px 22px rgba(59,108,247,0.6) !important;
+}
+
+/* Tombol COLLAPSE di dalam sidebar */
+section[data-testid="stSidebar"] button[kind="header"] {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #0f172a !important;
+    border-radius: 10px !important;
+    box-shadow: 0 2px 6px rgba(15,23,42,0.08) !important;
+}
+
+section[data-testid="stSidebar"] button[kind="header"]:hover {
+    background: #eef2ff !important;
+    border-color: #3b6cf7 !important;
+}
+/* =====================================================
+   DOWNLOAD BUTTON
+===================================================== */
 
 [data-testid="stDownloadButton"] button {
+
     background: var(--card) !important;
+
     color: var(--blue-primary) !important;
+
     border: 1.5px solid var(--border) !important;
+
     border-radius: 10px !important;
+
     font-weight: 600 !important;
+
     transition: all 0.2s ease !important;
 }
 
 [data-testid="stDownloadButton"] button:hover {
+
     background: var(--blue-light) !important;
+
     border-color: var(--blue-primary) !important;
 }
+
+/* =====================================================
+   SIDEBAR SAFE FIX
+===================================================== */
+
+[data-testid="stSidebar"] {
+    background: linear-gradient(
+        180deg,
+        #ffffff 0%,
+        #f8fafc 100%
+    ) !important;
+
+    border-right: 1px solid #e2e8f0 !important;
+
+    z-index: 999999 !important;
+}
+
+button[kind="header"] {
+    background: white !important;
+    border-radius: 10px !important;
+    border: 1px solid #dbe2ea !important;
+    box-shadow: 0 2px 6px rgba(15,23,42,0.08) !important;
+}
+
+button[kind="header"]:hover {
+    background: #eef2ff !important;
+    border-color: #3b6cf7 !important;
+}
+
 </style>
 """, unsafe_allow_html=True)
-
 
 if "page" not in st.session_state:
     st.session_state.page = "crawling"
@@ -750,12 +917,15 @@ with st.sidebar:
 
     # ── STATUS CRAWLER ──────────────────────────────────────────
     sched_ok       = st.session_state.get("_scheduler_started", False)
+    explicitly_off = st.session_state.get("nrt_explicitly_deactivated", False)
     sched_interval = st.session_state.get("_scheduler_interval", 0)
-    sched_color    = "#16a34a" if sched_ok else "#3b6cf7"
+    sched_color    = "#16a34a" if sched_ok else "#64748b"
     sched_label    = (
         f"Aktif — diperbarui tiap {sched_interval} menit"
         if sched_ok
-        else "Standby — akan crawl otomatis setiap 5 menit"
+        else "Nonaktif — crawling dihentikan oleh pengguna"
+        if explicitly_off
+        else "Standby — aktifkan melalui menu Hari Ini"
     )
 
     st.markdown(f"""

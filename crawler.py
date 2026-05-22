@@ -9,15 +9,24 @@ from scraper_worker import scrape_once
 AUTO_CRAWL_INTERVAL_HOURS = 0.083
 NRT_INTERVAL_MINUTES = 5
 
-LOG_FILE = "auto_crawl_log.json"
+LOG_FILE   = "auto_crawl_log.json"
 STATE_FILE = "crawler_state.json"
 
-# ── Internal lock agar tidak ada dua crawl berjalan bersamaan ──
+# ── Lock agar tidak ada dua crawl berjalan bersamaan ──────────────
 _crawl_lock = threading.Lock()
 
-# ── Flag untuk scheduler background thread ──
+# ── Flag scheduler ────────────────────────────────────────────────
 _scheduler_started = False
-_scheduler_lock = threading.Lock()
+_scheduler_lock    = threading.Lock()
+
+# ── Flag aktivasi NRT — harus True sebelum scheduler boleh jalan ──
+# PENTING: Nilai awal selalu False. Tidak ada kode module-level
+# yang boleh mengubah ini menjadi True secara otomatis.
+_nrt_enabled     = False
+_nrt_enable_lock = threading.Lock()
+
+# ── Event untuk menghentikan scheduler secara bersih ──────────────
+_scheduler_stop_event = threading.Event()
 
 
 # ═══════════════════════════════════════════════════════════
@@ -47,10 +56,10 @@ def get_auto_crawl_logs(limit=10):
 def save_auto_crawl_log(status="success", total_saved=0, error=None):
     logs = get_auto_crawl_logs(50)
     logs.insert(0, {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "status": status,
+        "timestamp":   datetime.now(timezone.utc).isoformat(),
+        "status":      status,
         "total_saved": total_saved,
-        "error": error,
+        "error":       error,
     })
     try:
         with open(LOG_FILE, "w") as f:
@@ -67,11 +76,11 @@ def set_crawler_state(is_running=False, service_active=None):
         service_active = previous_state.get("service_active", False)
 
     state = {
-        "is_running": bool(is_running),
-        "service_active": bool(service_active),
-        "updated_at": now,
-        "heartbeat_at": now if service_active else previous_state.get("heartbeat_at"),
-        "last_job_started_at": previous_state.get("last_job_started_at"),
+        "is_running":           bool(is_running),
+        "service_active":       bool(service_active),
+        "updated_at":           now,
+        "heartbeat_at":         now if service_active else previous_state.get("heartbeat_at"),
+        "last_job_started_at":  previous_state.get("last_job_started_at"),
         "last_job_finished_at": previous_state.get("last_job_finished_at"),
     }
 
@@ -86,7 +95,32 @@ def set_crawler_state(is_running=False, service_active=None):
     except Exception as e:
         print(f"[crawler] Gagal menulis state: {e}")
 
+# ═══════════════════════════════════════════════════════════
+#  NRT ACTIVATION PERSISTENCE
+# ═══════════════════════════════════════════════════════════
 
+NRT_ACTIVATION_FILE = "nrt_activation.json"
+
+def save_nrt_activation(activated: bool):
+    """Simpan status aktivasi NRT ke file agar persist setelah refresh."""
+    try:
+        with open(NRT_ACTIVATION_FILE, "w") as f:
+            json.dump({"activated": activated, "updated_at": datetime.now(timezone.utc).isoformat()}, f)
+    except Exception as e:
+        print(f"[crawler] Gagal menyimpan NRT activation: {e}")
+
+
+def load_nrt_activation() -> bool:
+    """Baca status aktivasi NRT dari file."""
+    if not os.path.exists(NRT_ACTIVATION_FILE):
+        return False
+    try:
+        with open(NRT_ACTIVATION_FILE, "r") as f:
+            data = json.load(f)
+            return bool(data.get("activated", False))
+    except Exception:
+        return False
+    
 # ═══════════════════════════════════════════════════════════
 #  CORE JOB
 # ═══════════════════════════════════════════════════════════
@@ -95,7 +129,6 @@ def auto_crawl_job():
     """
     Jalankan satu siklus crawling.
     Thread-safe: hanya satu crawl yang boleh berjalan pada satu waktu.
-    Bisa dipanggil dari tombol UI maupun scheduler otomatis.
     """
     if not _crawl_lock.acquire(blocking=False):
         print("[crawler] Crawl sedang berjalan, skip.")
@@ -129,34 +162,38 @@ def auto_crawl_job():
 
 
 # ═══════════════════════════════════════════════════════════
-#  BACKGROUND SCHEDULER (dipakai Streamlit, tanpa terminal)
+#  BACKGROUND SCHEDULER
 # ═══════════════════════════════════════════════════════════
 
 def _scheduler_loop():
     """
-    Loop yang berjalan di daemon thread.
-    Crawling pertama langsung dijalankan, lalu setiap NRT_INTERVAL_MINUTES menit.
+    Loop daemon thread. Crawl pertama langsung, lalu tiap NRT_INTERVAL_MINUTES.
+    Berhenti bersih saat _scheduler_stop_event di-set.
     """
     print(f"[crawler] Scheduler dimulai — interval {NRT_INTERVAL_MINUTES} menit.")
     set_crawler_state(False, service_active=True)
 
-    while True:
+    while not _scheduler_stop_event.is_set():
         auto_crawl_job()
 
-        # Tulis heartbeat setiap 30 detik selagi menunggu interval berikutnya
+        # Tunggu interval berikutnya sambil tulis heartbeat tiap 10 detik
         wait_until = time.time() + (NRT_INTERVAL_MINUTES * 60)
-        while time.time() < wait_until:
-            # Heartbeat agar is_crawler_service_active() tetap True
+        while time.time() < wait_until and not _scheduler_stop_event.is_set():
             _write_heartbeat()
-            time.sleep(min(30, max(1, wait_until - time.time())))
+            time.sleep(min(10, max(1, wait_until - time.time())))
 
-        print(f"[crawler] Interval berikutnya dalam {NRT_INTERVAL_MINUTES} menit...")
+        if not _scheduler_stop_event.is_set():
+            print(f"[crawler] Mulai crawl berikutnya...")
+
+    # Bersihkan state saat loop selesai
+    set_crawler_state(False, service_active=False)
+    print("[crawler] Scheduler dihentikan.")
 
 
 def _write_heartbeat():
     """Perbarui heartbeat_at tanpa mengubah field lain."""
     state = get_crawler_state()
-    state["heartbeat_at"] = datetime.now(timezone.utc).isoformat()
+    state["heartbeat_at"]   = datetime.now(timezone.utc).isoformat()
     state["service_active"] = True
     try:
         with open(STATE_FILE, "w") as f:
@@ -165,31 +202,92 @@ def _write_heartbeat():
         pass
 
 
+# ═══════════════════════════════════════════════════════════
+#  ACTIVATION API  ← dipakai oleh crawling_page.py
+# ═══════════════════════════════════════════════════════════
+
+def is_nrt_enabled() -> bool:
+    """Kembalikan True jika NRT sudah diaktifkan user."""
+    return _nrt_enabled
+
+
+def activate_nrt_scheduler():
+    """
+    Aktifkan NRT scheduler.
+    Harus dipanggil HANYA dari tombol UI — tidak dari module-level manapun.
+    Idempotent: aman dipanggil berkali-kali.
+    """
+    global _nrt_enabled
+
+    with _nrt_enable_lock:
+        _nrt_enabled = True
+        
+    save_nrt_activation(True)          # ← TAMBAH INI
+    _scheduler_stop_event.clear()   # pastikan event tidak dalam kondisi set
+    ensure_scheduler_running()
+    print("[crawler] NRT diaktifkan oleh user.")
+
+
+def deactivate_nrt_scheduler():
+    """
+    Hentikan NRT scheduler.
+    Thread yang berjalan akan berhenti bersih pada iterasi berikutnya.
+    """
+    global _nrt_enabled, _scheduler_started
+
+    with _nrt_enable_lock:
+        _nrt_enabled = False
+
+    save_nrt_activation(False)
+    _scheduler_stop_event.set()     # sinyal ke thread agar berhenti
+
+    with _scheduler_lock:
+        _scheduler_started = False  # izinkan start ulang di masa depan
+
+    set_crawler_state(False, service_active=False)
+    print("[crawler] NRT dinonaktifkan oleh user.")
+
+
 def ensure_scheduler_running():
     """
     Pastikan background scheduler sudah berjalan.
+    HANYA berjalan jika _nrt_enabled = True (sudah diaktifkan user).
     Aman dipanggil berkali-kali (idempotent).
-    Dipanggil dari crawling_page.py saat halaman dirender.
+
+    JANGAN panggil fungsi ini dari module-level atau saat app startup.
+    Panggil hanya setelah activate_nrt_scheduler() dipicu dari UI.
     """
     global _scheduler_started
+
+    if not _nrt_enabled:
+        # Belum diaktifkan user — jangan mulai thread apapun
+        return
 
     with _scheduler_lock:
         if _scheduler_started:
             return
 
-        t = threading.Thread(target=_scheduler_loop, name="CrawlerScheduler", daemon=True)
+        _scheduler_stop_event.clear()
+        t = threading.Thread(
+            target=_scheduler_loop,
+            name="CrawlerScheduler",
+            daemon=True,
+        )
         t.start()
         _scheduler_started = True
         print("[crawler] Background scheduler thread dimulai.")
 
 
 # ═══════════════════════════════════════════════════════════
-#  ENTRY POINT (tetap bisa dipakai via terminal jika mau)
+#  ENTRY POINT (via terminal, opsional)
 # ═══════════════════════════════════════════════════════════
 
 def main():
-    """Jalankan scheduler via terminal (opsional, tidak wajib)."""
-    print("Crawler realtime aktif.")
+    """Jalankan scheduler via terminal (run_scraper_loop.py)."""
+    global _nrt_enabled
+    _nrt_enabled = True          # mode terminal: langsung aktif
+
+    print("Crawler realtime aktif (mode terminal).")
     print(f"Interval: {NRT_INTERVAL_MINUTES} menit")
     set_crawler_state(False, service_active=True)
 
