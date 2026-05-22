@@ -30,8 +30,7 @@ Project ini menggunakan beberapa tools dan library berikut:
 | scikit-learn | Library machine learning untuk model Naive Bayes dan TF-IDF. |
 | Joblib | Memuat file model `.pkl` dan vectorizer `.pkl`. |
 | Sastrawi | Stemming kata Bahasa Indonesia. |
-| SQLite | Database lokal utama untuk menyimpan data tweet tanpa server tambahan. |
-| SQLAlchemy | Engine koneksi database yang digunakan oleh Pandas dan modul aplikasi. |
+| MySQL| Database lokal utama untuk menyimpan data tweet tanpa server tambahan. |
 | python-dotenv | Membaca konfigurasi rahasia dari file `.env`. |
 | OpenPyXL | Membaca dan menulis file Excel `.xlsx`. |
 | Playwright | Dependensi pendukung scraping/otomasi browser bila diperlukan. |
