@@ -1,3 +1,5 @@
+dari sqlite udah diubah ke mysql
+
 # Sentiment Dashboard Komdigi
 
 Dashboard analisis sentimen tweet terkait Komdigi dan isu ongkir menggunakan Streamlit. Aplikasi ini mendukung crawling tweet, penyimpanan data ke database lokal, preprocessing teks Bahasa Indonesia, prediksi sentimen dengan model Naive Bayes, serta visualisasi hasil secara interaktif.
