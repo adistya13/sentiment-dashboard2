@@ -1,29 +1,8 @@
 """
 sentiment_page.py
 =================
-Halaman Analisis Sentimen — diperbaiki untuk mengatasi semua prediksi negatif.
-
-PERBAIKAN vs VERSI LAMA:
-─────────────────────────────────────────────────────────────────────────────
-1. MENGGUNAKAN sentiment_service.py (HYBRID CLASSIFIER)
-   Tidak lagi memanggil model secara langsung dengan predict_batch sederhana.
-   Sebaliknya menggunakan sentiment_service yang sudah mengimplementasikan:
-   • Lexicon-based override untuk kelas POSITIF (yang tidak ada di model)
-   • Negation handling (tidak bagus ≠ bagus)
-   • Fallback ke model NB untuk negatif vs netral
-
-2. PREPROCESSING SELARAS
-   Memanggil preprocess_for_model() dari sentiment_service agar preprocessing
-   yang digunakan untuk prediksi persis sama dengan yang dipakai saat training.
-
-3. CONFIDENCE SCORE AKURAT
-   Menggunakan confidence gabungan dari lexicon score + model probability,
-   bukan hanya max probability dari model yang bias ke negatif.
-
-4. LABEL MAPPING KONSISTEN
-   Label dikembalikan selalu dalam format: 'Positif', 'Netral', 'Negatif'
-   (kapital huruf pertama) agar konsisten di seluruh tampilan.
-─────────────────────────────────────────────────────────────────────────────
+PERBAIKAN: Hapus parameter key= dari semua st.container() karena tidak
+didukung di Streamlit versi lama. CSS styling tetap berjalan via class HTML.
 """
 
 import streamlit as st
@@ -44,7 +23,6 @@ from timezone_utils import (
 )
 import plotly.graph_objects as go
 
-# ── Import sentiment_service (hybrid classifier) ──────────────────────────
 from sentiment_service import (
     preprocess_for_model,
     preprocess_untuk_lexicon,
@@ -118,40 +96,27 @@ def _sync_dynamic_period():
 
 
 # ─────────────────────────────────────────────────────────────
-# Core prediction function (DIPERBAIKI)
+# Core prediction
 # ─────────────────────────────────────────────────────────────
 
-def predict_batch_hybrid(texts: list[str]) -> list[tuple[str, float]]:
-    """
-    Prediksi sentimen menggunakan Hybrid Classifier dari sentiment_service.
-
-    Pipeline per tweet:
-    1. preprocess_for_model()   → teks untuk TF-IDF + NB
-    2. preprocess_untuk_lexicon() → teks untuk pengecekan lexicon
-    3. _hitung_skor_lexicon()   → hitung sinyal positif/negatif kuat
-    4. _klasifikasi_hybrid()    → putuskan label + confidence
-
-    Return: list of (label, confidence)
-    """
+def predict_batch_hybrid(texts):
     results = []
     for text in texts:
         teks_model   = preprocess_for_model(text)
         teks_lexicon = preprocess_untuk_lexicon(text)
         teks_lower   = str(text).lower()
-
-        skor  = _hitung_skor_lexicon(teks_lexicon)
-        label, conf = _klasifikasi_hybrid(teks_model, skor, teks_lower)
+        skor         = _hitung_skor_lexicon(teks_lexicon)
+        label, conf  = _klasifikasi_hybrid(teks_model, skor, teks_lower)
         results.append((label, conf))
     return results
 
 
-def preprocess_single(text: str) -> str:
-    """Preprocess satu teks untuk disimpan ke kolom clean_text."""
+def preprocess_single(text):
     return preprocess_for_model(text)
 
 
 # ─────────────────────────────────────────────────────────────
-# Shared UI helpers
+# UI helpers
 # ─────────────────────────────────────────────────────────────
 
 def _section_header(title, subtitle=""):
@@ -173,6 +138,20 @@ def _section_gap(size="md"):
     st.markdown(f'<div style="height:{heights.get(size,"1.45rem")};"></div>', unsafe_allow_html=True)
 
 
+def _card_open(extra_style=""):
+    """Buka div card pengganti st.container(border=True)."""
+    st.markdown(
+        f'<div style="background:#ffffff;border:1.5px solid #e2e8f0;border-radius:12px;'
+        f'box-shadow:0 2px 6px rgba(15,23,42,0.06);padding:1.1rem 1.2rem 1rem;'
+        f'margin-bottom:0.5rem;{extra_style}">',
+        unsafe_allow_html=True,
+    )
+
+
+def _card_close():
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
 def _render_sentiment_styles():
     st.markdown("""
 <style>
@@ -184,31 +163,6 @@ section[data-testid="stMain"] * {
 .block-container { padding-top: 1rem !important; }
 [data-testid="stMainBlockContainer"] { padding-top: 1rem !important; }
 header[data-testid="stHeader"] { height: 0 !important; min-height: 0 !important; }
-
-.st-key-sentiment_keyword_panel,
-.st-key-sentiment_table_controls,
-.st-key-sentiment_download_panel,
-.st-key-sentiment_chart_panel,
-.st-key-sentiment_trend_panel,
-.st-key-sentiment_wordfreq_panel {
-    background: #ffffff !important;
-    border: 1.5px solid #e2e8f0 !important;
-    border-radius: 12px !important;
-    box-shadow: 0 2px 6px rgba(15,23,42,0.06) !important;
-    padding: 1.1rem 1.2rem 1rem !important;
-}
-
-.st-key-sentiment_keyword_panel [data-testid="stTextInput"] label p,
-.st-key-sentiment_table_controls [data-testid="stTextInput"] label p,
-.st-key-sentiment_table_controls [data-testid="stSelectbox"] label p {
-    color: #334155 !important;
-    font-size: 0.72rem !important;
-    font-weight: 800 !important;
-    letter-spacing: 0.04em !important;
-    line-height: 1.2 !important;
-    margin-bottom: 0.22rem !important;
-    text-transform: uppercase !important;
-}
 
 .stButton > button {
     border-radius: 12px !important;
@@ -419,7 +373,7 @@ def _render_donut_chart(pos_n, neu_n, neg_n, total, filter_label):
         legend=dict(orientation="h", y=-0.1, x=0.5, xanchor="center", font=dict(size=11)),
         paper_bgcolor="rgba(0,0,0,0)",
     )
-    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
     return dominant
 
 
@@ -446,7 +400,7 @@ def _render_bar_chart(pos_n, neu_n, neg_n, total):
         yaxis=dict(showgrid=True, gridcolor="rgba(226,232,240,0.8)", griddash="dot",
                    tickfont=dict(size=10, color="#94a3b8")),
     )
-    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 # ─────────────────────────────────────────────────────────────
@@ -496,49 +450,9 @@ def _render_trend_chart(fdf, filter_label, dt_start, dt_end):
                    tickfont=dict(size=10, color="#94a3b8")),
         hovermode="x unified",
     )
-    with st.container(border=True, key="sentiment_trend_panel"):
-        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
-
-
-# ─────────────────────────────────────────────────────────────
-# Confidence histogram
-# ─────────────────────────────────────────────────────────────
-
-# def _render_confidence_chart(fdf):
-#     _section_header(
-#         "🎯 Distribusi Keyakinan Model",
-#         "Seberapa yakin classifier dalam mengklasifikasikan setiap tweet"
-#     )
-
-#     fig = go.Figure()
-#     sent_cfg = [
-#         ("Positif", "#16a34a", "rgba(22,163,74,0.7)"),
-#         ("Netral",  "#94a3b8", "rgba(148,163,184,0.7)"),
-#         ("Negatif", "#ef4444", "rgba(239,68,68,0.7)"),
-#     ]
-#     for sent, color, fill_color in sent_cfg:
-#         sub = fdf[fdf["sentiment"] == sent]["confidence"]
-#         if sub.empty:
-#             continue
-#         fig.add_trace(go.Histogram(
-#             x=sub, name=sent, nbinsx=20,
-#             marker=dict(color=fill_color, line=dict(color=color, width=1)),
-#             opacity=0.85,
-#             hovertemplate=f"<b>{sent}</b><br>Keyakinan: %{{x:.0%}}<br>Jumlah: %{{y}}<extra></extra>",
-#         ))
-#     fig.update_layout(
-#         height=260, margin=dict(l=0, r=0, t=10, b=0), barmode="overlay",
-#         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-#         legend=dict(orientation="h", y=1.1, x=0, font=dict(size=11)),
-#         xaxis=dict(tickformat=".0%", title="Tingkat Keyakinan",
-#                    tickfont=dict(size=10, color="#94a3b8"),
-#                    showgrid=True, gridcolor="rgba(226,232,240,0.6)"),
-#         yaxis=dict(title="Jumlah Tweet",
-#                    tickfont=dict(size=10, color="#94a3b8"),
-#                    showgrid=True, gridcolor="rgba(226,232,240,0.6)", griddash="dot"),
-#     )
-#     with st.container(border=True, key="sentiment_conf_panel"):
-#         st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+    # ─── PERBAIKAN: hapus key= dari st.container() ───
+    with st.container():
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
 
 # ─────────────────────────────────────────────────────────────
@@ -609,7 +523,7 @@ def _render_word_freq_per_sentiment(fdf):
                            tickfont=dict(size=8, color="#94a3b8"), fixedrange=True),
                 yaxis=dict(showgrid=False, tickfont=dict(size=9, color="#334155"), fixedrange=True),
             )
-            st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -671,25 +585,25 @@ def _render_tweet_table(fdf, filter_label):
         f"Total {len(fdf):,} tweet · {filter_label}"
     )
 
-    with st.container(border=True, key="sentiment_table_controls"):
-        tf1, tf2, tf3 = st.columns([3, 1.6, 1.7], gap="medium", vertical_alignment="bottom")
-        with tf1:
-            search = st.text_input(
-                "Search tweet", placeholder="Ketik kata kunci di isi tweet...",
-                key="sentiment_table_search",
-            )
-        with tf2:
-            sf = st.selectbox(
-                "Filter sentimen",
-                ["Semua", "Positif 😊", "Netral 😐", "Negatif 😞"],
-                key="sentiment_table_filter",
-            )
-        with tf3:
-            sort_by = st.selectbox(
-                "Urutkan",
-                ["Terbaru dulu", "Terlama dulu", "Keyakinan tertinggi"],
-                key="sentiment_table_sort",
-            )
+    # ─── PERBAIKAN: ganti st.container(key=) dengan st.columns biasa ───
+    tf1, tf2, tf3 = st.columns([3, 1.6, 1.7], gap="medium")
+    with tf1:
+        search = st.text_input(
+            "🔍 Cari tweet", placeholder="Ketik kata kunci di isi tweet...",
+            key="sentiment_table_search",
+        )
+    with tf2:
+        sf = st.selectbox(
+            "Filter sentimen",
+            ["Semua", "Positif 😊", "Netral 😐", "Negatif 😞"],
+            key="sentiment_table_filter",
+        )
+    with tf3:
+        sort_by = st.selectbox(
+            "Urutkan",
+            ["Terbaru dulu", "Terlama dulu", "Keyakinan tertinggi"],
+            key="sentiment_table_sort",
+        )
 
     _section_gap("sm")
 
@@ -711,26 +625,23 @@ def _render_tweet_table(fdf, filter_label):
     else:
         tdf = tdf.sort_values("confidence", ascending=False)
 
-    # out = tdf[["created_at", "crawled_at", "text", "clean_text", "sentiment", "confidence"]].copy()
     out = tdf[["created_at", "crawled_at", "text", "clean_text", "sentiment"]].copy()
     out["created_at"]  = out["created_at"].apply(format_dt)
     out["crawled_at"]  = out["crawled_at"].apply(format_dt)
-    # out["confidence"]  = out["confidence"].apply(lambda x: f"{x:.0%}")
     out["sentiment"]   = out["sentiment"].map({
         "Positif": "😊 Positif", "Netral": "😐 Netral", "Negatif": "😞 Negatif",
     }).fillna(out["sentiment"])
-    # out.columns = ["Tanggal Tweet", "Masuk Database", "Tweet Asli", "Tweet Bersih", "Sentimen", "Keyakinan"]
     out.columns = ["Tanggal Tweet", "Masuk Database", "Tweet Asli", "Tweet Bersih", "Sentimen"]
 
     render_standard_table(
         out, height=400, min_width=1220,
         badge_columns=["Sentimen"],
-        nowrap=["Tanggal Tweet", "Masuk Database", "Sentimen", "Keyakinan"],
+        nowrap=["Tanggal Tweet", "Masuk Database", "Sentimen"],
         wide_columns=["Tweet Asli", "Tweet Bersih"],
         column_widths={
             "Tanggal Tweet": "170px", "Masuk Database": "170px",
             "Tweet Asli": "360px",   "Tweet Bersih": "360px",
-            "Sentimen": "130px",     "Keyakinan": "110px",
+            "Sentimen": "130px",
         },
     )
     st.caption(f"Menampilkan {len(tdf):,} tweet")
@@ -927,11 +838,9 @@ def show():
         if force_refresh:
             st.info("🔄 Menyegarkan prediksi sentimen dengan data terbaru...")
         with st.spinner("🔍 Preprocessing & prediksi sentimen (Hybrid Classifier)..."):
-            # Preprocess semua tweet
             df["clean_text"] = df["text"].apply(preprocess_single)
             dfc = df[df["clean_text"].str.strip().str.len() > 0].copy()
 
-            # Prediksi menggunakan hybrid classifier
             results = predict_batch_hybrid(dfc["text"].tolist())
             if results:
                 sentiments, confidences = zip(*results)
@@ -949,7 +858,8 @@ def show():
     # ── Keyword filter ────────────────────────────────────────
     _section_header("🎯 Filter Kata Kunci", "Kosongkan untuk melihat semua tweet")
 
-    with st.container(border=True, key="sentiment_keyword_panel"):
+    # ─── PERBAIKAN: hapus key= dari st.container() ───
+    with st.container():
         kw = st.text_input(
             "Kata kunci", placeholder="Contoh: ongkir, kurir, komdigi...",
             key="sentiment_keyword_search",
@@ -1000,21 +910,18 @@ def show():
     col_left, col_right = st.columns(2, gap="medium")
     with col_left:
         _section_header("🔵 Sebaran Sentimen", f"Periode {filter_label}")
-        with st.container(border=True, key="sentiment_chart_panel"):
+        # ─── PERBAIKAN: hapus key= dari st.container() ───
+        with st.container():
             dominant = _render_donut_chart(pos_n, neu_n, neg_n, total, filter_label)
     with col_right:
         _section_header("📊 Perbandingan Jumlah per Sentimen", f"Periode {filter_label}")
-        with st.container(border=True, key="sentiment_bar_panel"):
+        with st.container():
             _render_bar_chart(pos_n, neu_n, neg_n, total)
     _section_gap("lg")
 
     # ── Trend ─────────────────────────────────────────────────
     _render_trend_chart(fdf, filter_label, start_date, end_date)
     _section_gap("lg")
-
-    # ── Confidence ────────────────────────────────────────────
-    # _render_confidence_chart(fdf)
-    # _section_gap("lg")
 
     # ── Word freq ─────────────────────────────────────────────
     _render_word_freq_per_sentiment(fdf)
@@ -1035,15 +942,17 @@ def show():
     # ── Download ──────────────────────────────────────────────
     _section_header("📥 Unduh Hasil Analisis")
 
-    with st.container(border=True, key="sentiment_download_panel"):
-        d1, d2, d3 = st.columns(3, gap="medium", vertical_alignment="bottom")
+    # ─── PERBAIKAN: hapus key= dari st.container() ───
+    with st.container():
+        d1, d2, d3 = st.columns(3, gap="medium")
 
         with d1:
             st.download_button(
                 "📥 Semua Hasil Prediksi",
                 fdf.to_csv(index=False).encode("utf-8"),
                 f"hasil_prediksi_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                "text/csv", width="stretch",
+                "text/csv",
+                use_container_width=True,
             )
         with d2:
             summary = pd.DataFrame({
@@ -1055,12 +964,14 @@ def show():
                 "📈 Ringkasan Sentimen",
                 summary.to_csv(index=False).encode("utf-8"),
                 f"ringkasan_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                "text/csv", width="stretch",
+                "text/csv",
+                use_container_width=True,
             )
         with d3:
             st.download_button(
                 "🎯 Rekomendasi Tindakan",
                 df_rek.to_csv(index=False).encode("utf-8"),
                 f"rekomendasi_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
-                "text/csv", width="stretch",
+                "text/csv",
+                use_container_width=True,
             )

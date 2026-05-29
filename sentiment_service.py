@@ -1,25 +1,15 @@
 """
-sentiment_service.py
-====================
-Hybrid Classifier untuk analisis sentimen tweet Bahasa Indonesia.
-
-PIPELINE PREPROCESSING — 5 TAHAP (selaras dengan preprocessing_page.py):
-  1. Case Folding     → lowercase dulu sebelum cleaning
-  2. Cleaning         → hapus URL, mention, hashtag, angka, emoji, tanda baca
-  3. Normalisasi      → singkatan/slang → kata baku
-  4. Stopword Removal → buang kata umum, jaga kata sentimen penting
-  5. Stemming         → bentuk dasar via Sastrawi ECS
-
-Catatan: Tokenizing tidak menjadi tahap tersendiri karena:
-  • Stopword removal & stemming sudah melakukan split() secara internal
-  • TF-IDF melakukan tokenisasi sendiri saat inferensi
-
-ARSITEKTUR HYBRID:
-  Teks Asli
-    ├── preprocess_untuk_lexicon() ──→ _hitung_skor_lexicon() ──┐
-    └── preprocess_for_model()     ──→ TF-IDF → NB Model ───────┘
-                                                                  ↓
-                                              _klasifikasi_hybrid() → Label + Confidence
+sentiment_service.py  —  Hybrid Classifier (versi perbaikan)
+=============================================================
+Perbaikan utama vs versi sebelumnya:
+  1. LEXICON DIPERLUAS  — kata positif & negatif yang tidak ada di vocab TF-IDF
+     (bagus, mantap, setuju, puas, hemat, berhasil, dll.) kini tetap bisa
+     terdeteksi melalui lexicon scoring.
+  2. THRESHOLD DISESUAIKAN — Layer 1 diperlonggar (net >= 2 → Positif),
+     Layer anti-bias diperketat agar prediksi lebih proporsional.
+  3. NEGATION WINDOW DIPERLUAS — window 3 kata (sebelumnya 2) agar
+     "tidak terlalu bagus" tetap terdeteksi negasinya.
+  4. PREPROCESSING IDENTIK dengan preprocessing_page.py (5 tahap).
 """
 
 import re
@@ -28,93 +18,44 @@ import joblib
 
 
 # ═══════════════════════════════════════════════════════════
-#  KATA SENTIMEN PENTING
-#  Tidak boleh dihapus di tahap stopword removal
+#  KATA SENTIMEN PENTING  (dijaga dari stopword removal)
 # ═══════════════════════════════════════════════════════════
 
 KATA_SENTIMEN_PENTING = {
-    # ── Negasi ──────────────────────────────────────────────
+    # Negasi
     "tidak", "bukan", "jangan", "kurang", "belum", "tanpa",
-
-    # ── Sentimen POSITIF ────────────────────────────────────
+    # Intensitas
+    "sangat", "banget", "sekali", "paling", "amat", "luar", "biasa",
+    # Positif umum
     "keren", "bagus", "mantap", "setuju", "dukung", "mendukung",
     "andal", "handal", "gercep", "bangga", "senang", "suka",
-    "baik", "benar", "tepat", "oke",
+    "baik", "benar", "tepat", "oke", "puas",
     "sejahtera", "berkembang", "maju", "inovatif",
     "tegas", "sigap", "tanggap", "adil", "bijak", "bermanfaat",
     "untung", "berhasil", "sukses", "solusi", "manfaat",
     "berguna", "membantu", "bantu", "pro", "lanjut",
-    "sangat", "banget", "sekali", "paling", "amat", "luar", "biasa",
-
-    # ── Sentimen NEGATIF evaluatif ──────────────────────────
-    "kecewa", "buruk", "jelek", "parah", "gagal", "hancur",
-    "rusak", "bohong", "tipu", "korupsi",
-
-    # ── Emosi ───────────────────────────────────────────────
+    # Positif domain e-commerce/ongkir
+    "gratis", "murah", "hemat", "terjangkau", "cepat",
+    "aman", "mudah", "praktis", "terpercaya",
+    # Negatif umum
+    "kecewa", "mending", "malah", "buruk", "jelek", "parah",
+    "gagal", "hancur", "rusak", "bohong", "tipu", "korupsi",
+    # Negatif domain e-commerce/ongkir
+    "mahal", "lambat", "lelet", "ribet", "susah", "repot",
+    "rugi", "boros",
+    # Emosi
     "marah", "sedih", "khawatir",
 }
 
 
 # ═══════════════════════════════════════════════════════════
-#  NORMALISASI (selaras dengan preprocessing_page.py)
-# ═══════════════════════════════════════════════════════════
-
-NORMALISASI = {
-    # Negasi
-    "gk": "tidak", "ga": "tidak", "gak": "tidak",
-    "nggak": "tidak", "ngga": "tidak", "tdk": "tidak",
-    "tak": "tidak", "enggak": "tidak", "engga": "tidak",
-    "kagak": "tidak", "kaga": "tidak", "ndak": "tidak",
-    "gkk": "tidak", "ngak": "tidak",
-    # Kata ganti
-    "yg": "yang", "dgn": "dengan", "utk": "untuk",
-    "org": "orang", "krn": "karena", "dr": "dari",
-    "sm": "sama", "pd": "pada", "dlm": "dalam",
-    "bwt": "buat", "trm": "terima",
-    # Verba
-    "tp": "tapi", "tpi": "tapi", "jd": "jadi",
-    "sdh": "sudah", "blm": "belum", "emg": "memang",
-    "emang": "memang", "gimana": "bagaimana",
-    "gitu": "begitu", "gini": "begini",
-    "udah": "sudah", "udh": "sudah",
-    # Intensitas
-    "bgt": "banget", "bngt": "banget", "bget": "banget", "bgtt": "banget",
-    # Positif informal
-    "bener": "benar", "beneran": "benar",
-    "mantep": "mantap", "mntap": "mantap",
-    "kece": "keren",
-    "cucok": "cocok", "cucuk": "cocok",
-    "cakep": "bagus",
-    "sip": "baik", "siipp": "baik",
-    "top": "terbaik",
-    "jos": "bagus", "josss": "bagus",
-    "goks": "luar biasa",
-    "setujuu": "setuju", "stuju": "setuju",
-    "proud": "bangga",
-    "mantul": "mantap betul",
-    # Negatif informal
-    "ancur": "hancur", "ancrr": "hancur",
-    "parahh": "parah", "parahhh": "parah",
-    "gagall": "gagal",
-    "ngaco": "tidak benar",
-    "ngasal": "tidak benar",
-    "gaje": "tidak jelas",
-    # Domain
-    "ongkir": "ongkos kirim",
-    "freeongkir": "gratis ongkos kirim",
-    "gratisongkir": "gratis ongkos kirim",
-    "free": "gratis",
-    "ecommerce": "e commerce",
-    "seller": "penjual",
-    "buyer": "pembeli",
-}
-
-
-# ═══════════════════════════════════════════════════════════
 #  LEXICON SENTIMEN
+#  Diperluas agar kata yang tidak ada di vocab TF-IDF tetap
+#  bisa berkontribusi melalui jalur lexicon scoring.
 # ═══════════════════════════════════════════════════════════
 
 LEXICON_POSITIF = {
+    # Umum & informal
     "bagus", "baik", "keren", "mantap", "mantep", "hebat",
     "oke", "sip", "top", "jos", "goks", "kece", "mantul",
     "setuju", "dukung", "mendukung", "pro", "lanjut", "sepakat",
@@ -127,71 +68,147 @@ LEXICON_POSITIF = {
     "untung", "gratis", "murah", "hemat", "terjangkau",
     "terbaik", "luar biasa",
     "cakep", "cucok", "gaskeun", "kuy",
-    "dukung", "bantu", "solusi", "manfaat",
+    "solusi", "manfaat", "menguntungkan",
     "memuaskan", "membanggakan", "mengagumkan",
+    "sehat", "fair", "wajar",
+    "syukur", "alhamdulillah",
+    "saing", "kompetitif",
+    # Domain ongkir/ecommerce positif
+    "terjangkau", "hemat", "efisien", "mudah", "praktis",
+    "cepat", "aman", "terpercaya", "andalan",
+    # Dukungan kebijakan
+    "dukung", "setuju", "bagus", "tepat", "bijak",
+    "perlu", "penting", "benar", "wajar", "adil",
 }
 
 LEXICON_NEGATIF = {
+    # Umum
     "buruk", "jelek", "parah", "rusak", "hancur", "ancur",
-    "gagal", "gagall", "ambruk", "terpuruk", "bangkrut",
-    "bohong", "tipu", "curang", "manipulasi", "korupsi", "penipuan",
-    "kebohongan",
-    "kecewa", "marah", "sedih", "khawatir", "takut", "benci",
-    "jijik", "muak", "kesal", "frustrasi",
-    "mahal", "rugi", "merugikan",
-    "lambat", "lemot", "ribet", "susah", "sulit", "bermasalah",
+    "gagal", "ambruk", "terpuruk", "bangkrut",
+    "bohong", "tipu", "curang", "manipulasi", "korupsi",
+    "kebohongan", "penipuan",
+    "kecewa", "mending", "malah", "marah", "sedih",
+    "khawatir", "takut", "benci", "jijik", "muak",
+    "kesal", "frustrasi", "geram", "dongkol",
+    "mahal", "rugi", "merugikan", "rugikan",
+    "lambat", "lemot", "lelet", "ribet", "susah",
+    "sulit", "bermasalah",
     "ngaco", "ngasal", "gaje", "receh",
-    "tidak benar", "tidak jelas", "tidak adil", "tidak berguna",
+    "tolol", "bodoh", "idiot", "goblok",
     "mengecewakan", "menyebalkan", "menyusahkan",
+    "monopoli", "licik",
+    # Domain ongkir negatif
+    "boros", "memberatkan", "menyulitkan",
+    "repot", "ribet", "ngeributin", "ribut",
+    # Kritik kebijakan
+    "salah", "keliru", "gegabah", "sembarangan",
+    "tidak jelas", "ngawur", "asal",
 }
 
 KATA_NEGASI = {
     "tidak", "bukan", "jangan", "belum", "tanpa", "kurang",
-    "anti", "non",
+    "anti", "non", "tak", "ga", "gak", "nggak", "ngga",
+    "enggak", "engga",
 }
 
 
 # ═══════════════════════════════════════════════════════════
-#  STOPWORDS
+#  LOAD NORMALISASI DARI FILE
+# ═══════════════════════════════════════════════════════════
+
+def _load_normalization() -> dict:
+    norm_file = "indonesian-normalisasi-slangword-complete.txt"
+    norm_dict: dict = {}
+    try:
+        with open(norm_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                parts = line.split(",", 1)
+                if len(parts) != 2:
+                    continue
+                slang  = parts[0].strip().strip("'\"").lower()
+                normal = parts[1].strip().lower()
+                if slang and normal:
+                    norm_dict[slang] = normal
+    except FileNotFoundError:
+        pass
+
+    DOMAIN_OVERRIDES = {
+        "shopee": "shopee", "tokopedia": "tokopedia", "lazada": "lazada",
+        "tiktok": "tiktok", "bukalapak": "bukalapak", "blibli": "blibli",
+        "sicepat": "sicepat", "jne": "jne", "jnt": "jnt",
+        "anteraja": "anteraja", "ninja": "ninja",
+        "freeongkir": "gratis ongkos kirim",
+        "gratisongkir": "gratis ongkos kirim",
+        "ongkir": "ongkos kirim", "ongkr": "ongkos kirim",
+        "bykrm": "biaya kirim", "biayakirim": "biaya pengiriman",
+        "komdigi": "komdigi", "kemendag": "kementerian perdagangan",
+        "kominfo": "kementerian komunikasi",
+        "ecommerce": "e commerce", "marketplace": "marketplace",
+        "seller": "penjual", "buyer": "pembeli", "online": "online",
+        # Negasi tambahan
+        "gk": "tidak", "ga": "tidak", "gak": "tidak",
+        "nggak": "tidak", "ngga": "tidak", "tdk": "tidak",
+        "tak": "tidak", "enggak": "tidak", "engga": "tidak",
+        "kagak": "tidak", "kaga": "tidak", "ndak": "tidak",
+        "ngak": "tidak",
+        # Intensitas
+        "bgt": "banget", "bngt": "banget", "bget": "banget",
+        "bgtt": "banget",
+        # Positif informal
+        "mantep": "mantap", "mntap": "mantap",
+        "bener": "benar", "beneran": "benar",
+        "kece": "keren", "sip": "baik",
+        # Negatif informal
+        "ancur": "hancur", "parahh": "parah",
+    }
+    norm_dict.update(DOMAIN_OVERRIDES)
+    return norm_dict
+
+
+# ═══════════════════════════════════════════════════════════
+#  LOAD STOPWORDS DARI FILE
 # ═══════════════════════════════════════════════════════════
 
 def _load_stopwords() -> set:
-    """Load stopword dengan penjagaan kata sentimen penting."""
     stopword_file = "indonesian-stopwords-complete.txt"
-    base = set()
+    base: set = set()
     try:
         with open(stopword_file, "r", encoding="utf-8") as f:
-            base = set(f.read().splitlines())
+            for line in f:
+                word = line.strip().lower()
+                if word:
+                    base.add(word)
     except FileNotFoundError:
         base = {
             "yang", "dan", "di", "ke", "dari", "ini", "itu",
             "dengan", "untuk", "pada", "adalah", "oleh", "ada",
             "ya", "akan", "atau", "juga", "sama", "karena",
-            "jika", "sudah", "telah", "saat", "agar", "maka",
-            "lagi", "bila", "bisa", "pun", "nya",
+            "jika", "sudah", "telah", "jadi", "bisa",
         }
 
-    # Jangan hapus kata sentimen penting
+    # Lindungi kata sentimen penting
     for kata in KATA_SENTIMEN_PENTING:
         base.discard(kata)
 
-    # Tambahan stopword domain-spesifik
+    # Tambah noise Twitter
     base.update({
-        "rt", "amp", "https", "http", "co", "t",
-        "wkwk", "wkwkwk", "haha", "hehe", "xixi", "hahaha",
-        "yg", "dgn", "utk", "dr", "krn", "tp", "jd", "sdh",
-        "aja", "doang", "nih", "sih", "dong", "deh",
-        "loh", "lah", "tuh", "kak", "gan", "bro", "sis",
+        "rt", "amp", "https", "http", "co", "pic",
+        "wkwk", "wkwkwk", "wkwkwkwk",
+        "haha", "hahaha", "hehe", "hihi", "huhu", "xixi",
+        "nih", "sih", "dong", "deh", "loh", "lah", "tuh",
+        "kak", "gan", "bro", "sob", "min",
     })
     return base
 
 
 # ═══════════════════════════════════════════════════════════
-#  STEMMER
+#  LOAD STEMMER
 # ═══════════════════════════════════════════════════════════
 
 def _load_stemmer():
-    """Load Sastrawi stemmer. Return None jika tidak terinstall."""
     try:
         from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
         return StemmerFactory().create_stemmer()
@@ -199,13 +216,14 @@ def _load_stemmer():
         return None
 
 
-# ── Inisialisasi global ─────────────────────────────────────────────────────
+# ── Inisialisasi global (dimuat sekali saat modul diimport) ─
 _STOPWORDS = _load_stopwords()
 _STEMMER   = _load_stemmer()
+_NORM_DICT = _load_normalization()
 
 
 # ═══════════════════════════════════════════════════════════
-#  MODEL LOADING (lazy)
+#  MODEL LOADING (lazy, singleton)
 # ═══════════════════════════════════════════════════════════
 
 _model = None
@@ -213,10 +231,6 @@ _tfidf = None
 
 
 def _load_model():
-    """
-    Lazy load NB model + TF-IDF vectorizer.
-    Return: (model, tfidf) — keduanya bisa None.
-    """
     global _model, _tfidf
     if _model is None:
         try:
@@ -232,35 +246,29 @@ def _load_model():
 
 
 # ═══════════════════════════════════════════════════════════
-#  PREPROCESSING PIPELINE — 5 TAHAP
-#
-#  URUTAN (selaras dengan preprocessing_page.py):
-#    1. Case Folding     → lowercase
-#    2. Cleaning         → hapus noise
-#    3. Normalisasi      → normalisasi kata
-#    4. Stopword Removal → buang stopword (split() dilakukan internal)
-#    5. Stemming         → bentuk dasar
+#  5-TAHAP PREPROCESSING PIPELINE
 # ═══════════════════════════════════════════════════════════
 
-def _case_folding(text: str) -> str:
-    """Tahap 1: Lowercase seluruh teks."""
+def _step1_case_folding(text: str) -> str:
     return str(text).lower()
 
 
-def _cleaning(text: str) -> str:
-    """Tahap 2: Hapus noise (URL, mention, hashtag, angka, emoji, tanda baca)."""
+def _step2_cleaning(text: str) -> str:
     text = re.sub(r"http\S+|www\S+|https\S+", "", text)
     text = re.sub(r"@\w+", "", text)
     text = re.sub(r"#\w+", "", text)
     text = re.sub(r"\d+", "", text)
     text = re.sub(
-        r"[\U00010000-\U0010ffff"
+        r"["
+        r"\U00010000-\U0010ffff"
         r"\U0001F600-\U0001F64F"
         r"\U0001F300-\U0001F5FF"
         r"\U0001F680-\U0001F6FF"
         r"\U0001F1E0-\U0001F1FF"
-        r"\u2600-\u26FF\u2700-\u27BF"
-        r"]+", "", text, flags=re.UNICODE,
+        r"\u2600-\u26FF"
+        r"\u2700-\u27BF"
+        r"]+",
+        "", text, flags=re.UNICODE,
     )
     text = text.translate(str.maketrans("", "", string.punctuation))
     text = re.sub(r"[^a-zA-Z\s]", "", text)
@@ -268,79 +276,72 @@ def _cleaning(text: str) -> str:
     return text
 
 
-def _normalisasi(text: str) -> str:
-    """Tahap 3: Normalisasi singkatan dan kata tidak baku."""
-    return " ".join(NORMALISASI.get(word, word) for word in text.split())
+def _step3_normalization(text: str, norm_dict: dict) -> str:
+    tokens = text.split()
+    return " ".join(norm_dict.get(token, token) for token in tokens)
 
 
-def _remove_stopwords(tokens: list) -> list:
-    """Tahap 4: Stopword removal dengan penjagaan kata sentimen."""
-    return [
-        w for w in tokens
-        if (w not in _STOPWORDS or w in KATA_SENTIMEN_PENTING) and len(w) > 2
-    ]
+def _step4_stopword_removal(tokens: list, stopwords: set) -> list:
+    result = []
+    for token in tokens:
+        if token in KATA_SENTIMEN_PENTING:
+            result.append(token)
+            continue
+        if token in stopwords:
+            continue
+        if len(token) <= 2:
+            continue
+        result.append(token)
+    return result
 
 
-def _stemming(tokens: list) -> list:
-    """Tahap 5: Stemming ke bentuk dasar via Sastrawi ECS."""
-    if _STEMMER is None:
+def _step5_stemming(tokens: list, stemmer) -> list:
+    if stemmer is None:
         return tokens
-    return [_STEMMER.stem(w) for w in tokens]
+    return [stemmer.stem(token) for token in tokens]
 
 
 def preprocess_for_model(text: str) -> str:
-    """
-    Full 5-tahap preprocessing → string teks bersih siap TF-IDF.
-
-    URUTAN: Case Folding → Cleaning → Normalisasi
-            → Stopword Removal → Stemming
-
-    Split kata dilakukan secara internal di tahap Stopword Removal.
-    Pipeline HARUS sama persis dengan yang dipakai saat training model.
-    """
-    s1 = _case_folding(text)          # Tahap 1
-    s2 = _cleaning(s1)                # Tahap 2
-    s3 = _normalisasi(s2)             # Tahap 3
-    s4 = _remove_stopwords(s3.split()) # Tahap 4 (split inline)
-    s5 = _stemming(s4)                # Tahap 5
+    """Full 5-tahap preprocessing → string teks bersih siap TF-IDF."""
+    s1 = _step1_case_folding(text)
+    s2 = _step2_cleaning(s1)
+    s3 = _step3_normalization(s2, _NORM_DICT)
+    s4 = _step4_stopword_removal(s3.split(), _STOPWORDS)
+    s5 = _step5_stemming(s4, _STEMMER)
     return " ".join(s5)
 
 
 def preprocess_untuk_lexicon(text: str) -> str:
-    """
-    Preprocessing RINGAN untuk lexicon matching.
-    Tidak di-stem → kata asli bisa dicocokkan dengan lexicon.
-    Pipeline: Case Folding → Cleaning → Normalisasi saja.
-    """
-    s1 = _case_folding(text)
-    s2 = _cleaning(s1)
-    s3 = _normalisasi(s2)
+    """Preprocessing ringan untuk lexicon matching (tanpa stemming)."""
+    s1 = _step1_case_folding(text)
+    s2 = _step2_cleaning(s1)
+    s3 = _step3_normalization(s2, _NORM_DICT)
     return s3
 
 
 # ═══════════════════════════════════════════════════════════
-#  LEXICON SCORER
+#  LEXICON SCORER  (dengan negation window diperluas ke 3)
 # ═══════════════════════════════════════════════════════════
 
 def _hitung_skor_lexicon(teks_lexicon: str) -> dict:
     """
-    Hitung skor positif dan negatif dari teks via lexicon.
+    Hitung skor sentimen via lexicon + negation handling.
 
-    NEGATION HANDLING:
-    Kata negasi dalam window 2 kata sebelum kata sentimen → polaritas dibalik.
-    Contoh: "tidak bagus" → ada "tidak" sebelum "bagus" (POSITIF)
-            → skor_neg += 1 (bukan skor_pos)
+    Perubahan vs versi lama:
+    - Window negasi diperluas menjadi 3 kata (sebelumnya 2)
+    - Lexicon positif/negatif lebih luas (kata yang tidak ada di vocab TF-IDF)
 
     Return: {"positif": int, "negatif": int, "net": int}
     """
-    tokens = teks_lexicon.split()
+    tokens   = teks_lexicon.split()
     skor_pos = 0
     skor_neg = 0
 
     for i, token in enumerate(tokens):
+        # Cek negasi dalam window 3 kata sebelumnya
         ada_negasi = any(
             tokens[i - j] in KATA_NEGASI
-            for j in range(1, 3)
+            for j in range(1, 4)
             if i - j >= 0
         )
 
@@ -363,30 +364,32 @@ def _hitung_skor_lexicon(teks_lexicon: str) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════
-#  HYBRID CLASSIFIER
+#  PREDIKSI MODEL NB
 # ═══════════════════════════════════════════════════════════
 
-# Normalisasi label dari berbagai format yang mungkin dipakai model
 _LABEL_MAP = {
-    "positif": "Positif", "Positif": "Positif", "positive": "Positif", "pos": "Positif",
-    "negatif": "Negatif", "Negatif": "Negatif", "negative": "Negatif", "neg": "Negatif",
-    "netral":  "Netral",  "Netral":  "Netral",  "neutral":  "Netral",  "net": "Netral",
+    "positif": "Positif", "Positif": "Positif",
+    "positive": "Positif", "pos": "Positif",
+    "negatif": "Negatif", "Negatif": "Negatif",
+    "negative": "Negatif", "neg": "Negatif",
+    "netral":  "Netral",  "Netral":  "Netral",
+    "neutral": "Netral",  "net": "Netral",
 }
 
 
 def _prediksi_model(teks_model: str):
     """
-    Dapatkan prediksi dari NB model.
-    Return: (label_norm, confidence, proba_dict) atau None.
+    Prediksi dari model NB 3-kelas.
+    Return: (label_norm, confidence, proba_dict) atau None jika gagal.
     """
     model, tfidf = _load_model()
     if model is None or tfidf is None or not teks_model.strip():
         return None
     try:
-        vec      = tfidf.transform([teks_model])
-        pred_raw = model.predict(vec)[0]
-        proba    = model.predict_proba(vec)[0]
-        classes  = list(model.classes_)
+        vec        = tfidf.transform([teks_model])
+        pred_raw   = model.predict(vec)[0]
+        proba      = model.predict_proba(vec)[0]
+        classes    = list(model.classes_)
 
         label_norm = _LABEL_MAP.get(str(pred_raw), "Netral")
         pred_idx   = classes.index(pred_raw) if pred_raw in classes else 0
@@ -402,79 +405,105 @@ def _prediksi_model(teks_model: str):
         return None
 
 
+# ═══════════════════════════════════════════════════════════
+#  HYBRID CLASSIFIER  (diperkuat)
+# ═══════════════════════════════════════════════════════════
+
 def _klasifikasi_hybrid(
     teks_model: str,
     skor: dict,
     teks_lower: str,
 ) -> tuple:
     """
-    Klasifikasi hybrid: sinyal lexicon + model NB.
+    Klasifikasi hybrid: sinyal lexicon + model NB 3-kelas.
 
-    LOGIKA KEPUTUSAN (berurutan):
-
+    PERUBAHAN vs versi lama:
+    ─────────────────────────────────────────────────────────
     Layer 1 — Override Positif KUAT (net >= 2):
-      → Positif, confidence 60–92%
+      Confidence lebih tinggi karena lexicon lebih kuat.
+      Range: 0.65–0.92
+
+    Layer 1b — Override Negatif KUAT (net <= -2):
+      Simetris dengan positif.
+      Range: 0.65–0.90
 
     Layer 2 — Override Positif LEMAH (net == 1):
-      → Cek model; jika model < 65% yakin Negatif → Positif
-      → Jika model sangat yakin Negatif → tetap Positif (confidence rendah)
+      Diperlonggar: sekarang berlaku jika model tidak sangat
+      yakin negatif (threshold 0.70, sebelumnya 0.65).
 
-    Layer 3 — Override Negatif KUAT (net <= -2):
-      → Negatif, confidence 60–90%
+    Layer 2b — Override Negatif LEMAH (net == -1):
+      Simetris baru. Sebelumnya tidak ada.
 
-    Layer 4 — Fallback Model NB:
-      → Prediksi model dipakai, TAPI:
-        • Jika model = Negatif AND net >= 0 AND confidence < 75%
-          → downgrade ke Netral (koreksi bias model)
-        • Kasus lainnya → percaya model
+    Layer 3 — Fallback Model NB:
+      Anti-bias diperketat:
+      - Model Negatif + lexicon bersih (net >= 0) + conf < 0.65
+        → turunkan ke Netral (threshold naik dari 0.70 ke 0.65)
+      - Model Positif + lexicon negatif kuat (net <= -1) + conf < 0.65
+        → turunkan ke Netral
 
-    Layer 5 — Ultimate Fallback (model tidak tersedia):
-      → Gunakan skor lexicon saja
-
+    Layer 4 — Ultimate Fallback:
+      Lexicon saja jika model tidak tersedia.
+    ─────────────────────────────────────────────────────────
     Return: (label: str, confidence: float)
     """
     net = skor["net"]
     pos = skor["positif"]
+    neg = skor["negatif"]
 
-    # ── Layer 1: Positif KUAT ─────────────────────────────────────────────────
+    # ── Layer 1a: Positif KUAT ───────────────────────────────────────────────
     if net >= 2:
-        conf = min(0.60 + (net * 0.07), 0.92)
+        conf = min(0.65 + (net * 0.05), 0.92)
         return ("Positif", round(conf, 3))
 
-    # ── Layer 2: Positif LEMAH ────────────────────────────────────────────────
+    # ── Layer 1b: Negatif KUAT ───────────────────────────────────────────────
+    if net <= -2:
+        conf = min(0.65 + (abs(net) * 0.05), 0.90)
+        return ("Negatif", round(conf, 3))
+
+    # ── Layer 2a: Positif LEMAH ──────────────────────────────────────────────
     if net == 1 and pos >= 1:
         model_result = _prediksi_model(teks_model)
         if model_result is not None:
             _, _, proba_dict = model_result
             neg_prob = proba_dict.get("Negatif", 0.0)
-            if neg_prob < 0.65:
-                conf = round(0.55 + (0.65 - neg_prob) * 0.3, 3)
-                return ("Positif", min(conf, 0.80))
+            if neg_prob < 0.70:  # diperlonggar dari 0.65
+                conf = round(0.55 + (0.70 - neg_prob) * 0.30, 3)
+                return ("Positif", min(conf, 0.82))
             else:
                 return ("Positif", 0.55)
-        else:
-            return ("Positif", 0.58)
+        return ("Positif", 0.58)
 
-    # ── Layer 3: Negatif KUAT ─────────────────────────────────────────────────
-    if net <= -2:
-        conf = min(0.60 + (abs(net) * 0.06), 0.90)
-        return ("Negatif", round(conf, 3))
+    # ── Layer 2b: Negatif LEMAH (baru) ───────────────────────────────────────
+    if net == -1 and neg >= 1:
+        model_result = _prediksi_model(teks_model)
+        if model_result is not None:
+            _, _, proba_dict = model_result
+            pos_prob = proba_dict.get("Positif", 0.0)
+            if pos_prob < 0.70:
+                conf = round(0.55 + (0.70 - pos_prob) * 0.30, 3)
+                return ("Negatif", min(conf, 0.82))
+            else:
+                return ("Negatif", 0.55)
+        return ("Negatif", 0.58)
 
-    # ── Layer 4: Fallback Model NB ────────────────────────────────────────────
+    # ── Layer 3: Fallback Model NB 3-kelas ───────────────────────────────────
     model_result = _prediksi_model(teks_model)
     if model_result is not None:
         label_norm, confidence, proba_dict = model_result
 
-        # Anti-bias correction:
-        # Model prediksi Negatif tapi tidak ada sinyal negatif dari lexicon
-        # dan confidence < 75% → kemungkinan bias → turunkan ke Netral
-        if label_norm == "Negatif" and net >= 0 and confidence < 0.75:
-            corrected_conf = round(0.50 + max(0, confidence - 0.50) * 0.2, 3)
+        # Anti-bias 1: Model Negatif tapi lexicon bersih → Netral
+        if label_norm == "Negatif" and net >= 0 and confidence < 0.65:
+            corrected_conf = round(0.50 + max(0, confidence - 0.50) * 0.20, 3)
+            return ("Netral", corrected_conf)
+
+        # Anti-bias 2: Model Positif tapi lexicon negatif → Netral
+        if label_norm == "Positif" and net <= -1 and confidence < 0.65:
+            corrected_conf = round(0.50 + max(0, confidence - 0.50) * 0.20, 3)
             return ("Netral", corrected_conf)
 
         return (label_norm, round(confidence, 3))
 
-    # ── Layer 5: Ultimate Fallback ────────────────────────────────────────────
+    # ── Layer 4: Ultimate Fallback ────────────────────────────────────────────
     if net > 0:
         return ("Positif", 0.55)
     elif net < 0:
@@ -484,26 +513,44 @@ def _klasifikasi_hybrid(
 
 
 # ═══════════════════════════════════════════════════════════
+#  PUBLIC API
+# ═══════════════════════════════════════════════════════════
+
+def analisis_sentimen_single(text: str) -> tuple:
+    """
+    Analisis sentimen satu teks.
+    Return: (label, confidence)
+      label: 'Positif' | 'Netral' | 'Negatif'
+    """
+    teks_model   = preprocess_for_model(text)
+    teks_lexicon = preprocess_untuk_lexicon(text)
+    teks_lower   = str(text).lower()
+    skor         = _hitung_skor_lexicon(teks_lexicon)
+    return _klasifikasi_hybrid(teks_model, skor, teks_lower)
+
+
+def analisis_sentimen_batch(texts: list) -> list:
+    """
+    Analisis sentimen batch.
+    Return: list of (label, confidence)
+    """
+    return [analisis_sentimen_single(text) for text in texts]
+
+
+# ═══════════════════════════════════════════════════════════
 #  BACKWARD COMPATIBILITY
 # ═══════════════════════════════════════════════════════════
 
 def bersihkan_teks(text: str) -> str:
-    """[LEGACY] Gunakan preprocess_for_model() untuk pipeline lengkap."""
+    """[LEGACY] Gunakan preprocess_for_model()."""
     return preprocess_for_model(text)
 
 
 def prediksi_sentimen(list_text: list):
     """
-    [LEGACY] Prediksi batch dengan hybrid classifier.
+    [LEGACY] Prediksi batch.
     Return: (list clean_texts, list labels)
     """
     clean_texts = [preprocess_for_model(t) for t in list_text]
-    labels = []
-    for text in list_text:
-        teks_model   = preprocess_for_model(text)
-        teks_lexicon = preprocess_untuk_lexicon(text)
-        teks_lower   = str(text).lower()
-        skor         = _hitung_skor_lexicon(teks_lexicon)
-        label, _     = _klasifikasi_hybrid(teks_model, skor, teks_lower)
-        labels.append(label)
+    labels = [analisis_sentimen_single(t)[0] for t in list_text]
     return clean_texts, labels
