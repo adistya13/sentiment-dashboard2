@@ -10,13 +10,17 @@ PIPELINE 5 TAHAP:
   4. Stopword Removal — hapus kata umum (DARI FILE stopword); JAGA kata sentimen
   5. Stemming         — bentuk dasar kata via Sastrawi ECS
 
-PERUBAHAN DARI VERSI SEBELUMNYA:
-  - Normalisasi kini dimuat dari 'indonesian-normalisasi-slangword-complete.txt'
-    (1.700+ entri), menggantikan dict hardcoded yang hanya ~60 entri.
-  - Stopword kini murni dari 'indonesian-stopwords-complete.txt', ditambah
-    noise Twitter yang spesifik — tidak ada penghapusan manual acak.
-  - KATA_SENTIMEN_PENTING diperluas dengan kata domain e-commerce/ongkir.
-  - Semua fungsi preprocessing menerima parameter eksplisit (tidak pakai global).
+PERBAIKAN DARI VERSI SEBELUMNYA (sync dengan sentiment_service.py):
+  - Domain override 'mending' → 'lebih baik' DIHAPUS.
+    Alasan: mengubah kata kritis/negatif menjadi sinyal positif di lexicon.
+    "mending X daripada Y" = kritik; setelah diubah jadi "lebih baik X..."
+    lexicon menangkap 'baik' sebagai POSITIF → hasil sentimen salah.
+  - Domain override 'mendingan' → 'lebih baik' DIHAPUS (alasan sama).
+  - 'mending', 'mendingan', 'daripada', 'ketimbang', 'ngapain', 'percuma',
+    'begini' DILINDUNGI dari stopword removal agar pola kontekstual
+    (POLA_KOMPARATIF, POLA_KRITIK_TERSIRAT) di sentiment_service.py tetap
+    dapat mendeteksinya saat input lexicon preprocessing.
+  - KATA_SENTIMEN_PENTING diperluas: tambahkan 'mending', 'malah'.
 
 CATATAN PENTING:
   Pipeline ini HARUS IDENTIK dengan sentiment_service.py agar token yang
@@ -119,18 +123,16 @@ def _sync_dynamic_period():
 #  Kata-kata ini WAJIB DIJAGA dan tidak boleh dihapus saat
 #  stopword removal, meskipun ada di file stopword.
 #
-#  Kenapa perlu? Karena file stopword mengandung kata seperti
-#  "tidak", "belum", "sangat" yang justru krusial untuk
-#  menentukan sentimen positif/negatif suatu kalimat.
+#  PERBAIKAN: Tambahkan 'mending' dan 'malah' agar tidak
+#  hilang di stopword removal dan bisa dideteksi oleh
+#  pola kontekstual di sentiment_service.py.
 # ───────────────────────────────────────────────────────────
 KATA_SENTIMEN_PENTING = {
     # ── Negasi (pembalik makna kalimat) ──────────────────
-    # "tidak bagus" ≠ "bagus" → "tidak" wajib ada
     "tidak", "bukan", "jangan", "kurang", "belum", "tanpa",
     # ── Intensitas (penguat/pelemah sentimen) ─────────────
-    # "sangat bagus" lebih positif dari "bagus" saja
     "sangat", "banget", "sekali", "paling", "amat",
-    "luar", "biasa",   # ← "luar biasa" = dua token, keduanya dijaga
+    "luar", "biasa",
     # ── Positif umum ──────────────────────────────────────
     "keren", "bagus", "mantap", "setuju", "dukung", "mendukung",
     "andal", "handal", "gercep", "bangga", "senang", "suka",
@@ -150,30 +152,52 @@ KATA_SENTIMEN_PENTING = {
     "rugi", "boros",
     # ── Emosi ─────────────────────────────────────────────
     "marah", "sedih", "khawatir", "kecewa",
+    # ── DITAMBAHKAN: Penanda pola kontekstual ─────────────
+    # Kata-kata ini perlu tetap ada agar pola komparatif dan
+    # pola kritik tersirat bisa terdeteksi di sentiment_service.
+    "mending",    # "mending X daripada Y" = kritik implisit
+    "mendingan",  # variasi mending
+    "malah",      # "malah rugi / malah tambah mahal" = negatif
+    "percuma",    # "percuma aja kebijakan ini" = sia-sia/negatif
+}
+
+
+# ───────────────────────────────────────────────────────────
+#  KATA POLA PENTING
+#  Kata struktural yang diperlukan agar pola kontekstual
+#  di sentiment_service.py bisa bekerja dengan benar.
+#  Kata-kata ini HARUS dilindungi dari stopword removal.
+# ───────────────────────────────────────────────────────────
+KATA_POLA_PENTING = {
+    "mending",    # penanda pola komparatif negatif
+    "mendingan",  # variasi mending
+    "daripada",   # komponen "mending X daripada Y"
+    "ketimbang",  # variasi daripada
+    "ngapain",    # penanda kritik tersirat
+    "percuma",    # penanda sia-sia
+    "begini",     # "kebijakan begini" = kritik tersirat
 }
 
 
 # ───────────────────────────────────────────────────────────
 #  LOAD NORMALIZATION DARI FILE
-#  File: indonesian-normalisasi-slangword-complete.txt
-#  Format per baris: slang,kata_baku
-#  Contoh: gk,tidak | ongkir,ongkos kirim | free,gratis
+#  PERBAIKAN: Hapus override 'mending' → 'lebih baik'
 # ───────────────────────────────────────────────────────────
 def _load_normalization() -> dict:
     """
     Muat kamus normalisasi dari file eksternal.
 
-    KENAPA DARI FILE?
-    File berisi 1.700+ pasang slang→baku yang jauh lebih lengkap
-    dibanding dict hardcoded. Dengan ini, kata seperti:
-      gk/ga/gak/kagak/ngga → semua jadi "tidak"
-      bgt/bngt/bget        → semua jadi "sangat"
-      ongkir/ongkr         → jadi "ongkos kirim"
-    ...dan ribuan kasus lainnya tertangani otomatis.
+    PERUBAHAN DARI VERSI SEBELUMNYA:
+    - 'mending'   TIDAK lagi dioverride ke 'lebih baik'
+    - 'mendingan' TIDAK lagi dioverride ke 'lebih baik'
 
-    Setelah file dimuat, override dengan entri khusus domain
-    (nama platform, singkatan kebijakan) yang mungkin belum ada
-    di file generik.
+    KENAPA?
+    'mending' dalam tweet biasanya digunakan sebagai kritik:
+      "mending ngurusin judol daripada ngurusin ongkir"
+    Jika diubah ke "lebih baik", lexicon scoring mendeteksi 'baik'
+    sebagai sinyal positif → hasil sentimen SALAH (Positif, harusnya Negatif).
+    Biarkan 'mending' apa adanya agar POLA_KOMPARATIF_NEGATIF
+    di sentiment_service.py bisa mendeteksinya.
     """
     norm_file = "indonesian-normalisasi-slangword-complete.txt"
     norm_dict: dict = {}
@@ -184,28 +208,20 @@ def _load_normalization() -> dict:
                 line = line.strip()
                 if not line:
                     continue
-                # Split hanya pada koma pertama — nilai bisa mengandung koma
-                # Contoh: "on the way, sedang di jalan,dijalan" → split jadi 2 bagian
                 parts = line.split(",", 1)
                 if len(parts) != 2:
                     continue
-                # Bersihkan tanda kutip liar di awal/akhir (ada di beberapa baris file)
                 slang  = parts[0].strip().strip("'\"").lower()
                 normal = parts[1].strip().lower()
                 if slang and normal:
                     norm_dict[slang] = normal
     except FileNotFoundError:
-        # Jika file tidak ditemukan, lanjut dengan dict kosong.
-        # Entri domain di bawah tetap akan ditambahkan.
         st.warning(
             "⚠️ File normalisasi tidak ditemukan: "
             f"'{norm_file}'. Hanya entri domain yang aktif."
         )
 
     # ── Override khusus domain ───────────────────────────
-    # Entri ini menimpa file generik karena domain spesifik
-    # membutuhkan perlakuan khusus (nama platform tidak diubah,
-    # singkatan kebijakan punya padanan resmi, dll.)
     DOMAIN_OVERRIDES: dict = {
         # Nama platform — pertahankan apa adanya
         "shopee":       "shopee",
@@ -237,6 +253,28 @@ def _load_normalization() -> dict:
         "seller":       "penjual",
         "buyer":        "pembeli",
         "online":       "online",
+        # Negasi informal
+        "gk":     "tidak", "ga":     "tidak", "gak":    "tidak",
+        "nggak":  "tidak", "ngga":   "tidak", "tdk":    "tidak",
+        "tak":    "tidak", "enggak": "tidak", "engga":  "tidak",
+        "kagak":  "tidak", "kaga":   "tidak", "ndak":   "tidak",
+        "ngak":   "tidak",
+        # Intensitas
+        "bgt": "banget", "bngt": "banget", "bget": "banget", "bgtt": "banget",
+        # Positif informal (hanya yang benar-benar positif)
+        "mantep":  "mantap", "mntap": "mantap",
+        "kece":    "keren",
+        "ancur":   "hancur", "parahh": "parah",
+        # ── SENGAJA TIDAK DIOVERRIDE (vs versi lama): ────────
+        # "mending"   → TIDAK diubah ke "lebih baik"
+        # "mendingan" → TIDAK diubah ke "lebih baik"
+        #   Alasan: lihat docstring di atas.
+        #
+        # "malah" → TIDAK dioverride ke "bahkan"
+        #   Alasan: nuansa kritis 'malah' perlu dipertahankan.
+        #
+        # "sip" → TIDAK dioverride ke "baik"
+        #   Alasan: "baik" terlalu kontekstual untuk lexicon positif.
     }
     norm_dict.update(DOMAIN_OVERRIDES)
 
@@ -245,23 +283,22 @@ def _load_normalization() -> dict:
 
 # ───────────────────────────────────────────────────────────
 #  LOAD STOPWORDS DARI FILE
-#  File: indonesian-stopwords-complete.txt
-#  Format: satu kata per baris
+#  PERBAIKAN: Lindungi kata pola penting dari stopword removal
 # ───────────────────────────────────────────────────────────
 def _load_stopwords() -> set:
     """
     Muat daftar stopword dari file eksternal.
 
-    PROSES SETELAH MUAT FILE:
-    1. Hapus KATA_SENTIMEN_PENTING dari daftar
-       → Agar "tidak", "belum", "sangat", dll. tidak ikut dibuang
-    2. Tambahkan noise Twitter/sosmed yang memang harus dibuang
-       → "rt", "amp", sisa URL, suara tawa, partikel informal
-
-    KENAPA DARI FILE?
-    File berisi 700+ stopword Indonesia yang lebih lengkap dan
-    terstandar dibanding daftar manual. Kita tidak perlu menambah/
-    mengurangi secara manual kecuali untuk dua kategori di atas.
+    PERUBAHAN DARI VERSI SEBELUMNYA:
+    Selain melindungi KATA_SENTIMEN_PENTING, kini juga melindungi
+    KATA_POLA_PENTING agar pola kontekstual di sentiment_service.py
+    bisa bekerja dengan benar:
+      - 'mending'    → penanda pola komparatif negatif
+      - 'daripada'   → komponen "mending X daripada Y"
+      - 'ketimbang'  → variasi daripada
+      - 'ngapain'    → penanda kritik tersirat
+      - 'percuma'    → penanda sia-sia/negatif
+      - 'begini'     → "kebijakan begini" = kritik tersirat
     """
     stopword_file = "indonesian-stopwords-complete.txt"
     base: set = set()
@@ -273,7 +310,6 @@ def _load_stopwords() -> set:
                 if word:
                     base.add(word)
     except FileNotFoundError:
-        # Fallback minimal — cukup untuk tetap jalan
         st.warning(
             "⚠️ File stopword tidak ditemukan: "
             f"'{stopword_file}'. Menggunakan daftar minimal."
@@ -286,24 +322,21 @@ def _load_stopwords() -> set:
         }
 
     # ── Langkah 1: Lindungi kata sentimen ────────────────
-    # Beberapa kata sentimen penting ADA di file stopword
-    # (misal: "tidak", "belum", "sangat", "paling", "kurang").
-    # Kita HAPUS dari stopword agar tidak ikut dibuang.
     for kata in KATA_SENTIMEN_PENTING:
         base.discard(kata)
 
-    # ── Langkah 2: Tambah noise Twitter/sosmed ────────────
-    # Ini bukan stopword bahasa Indonesia biasa, tapi noise
-    # yang sangat sering muncul di tweet dan tidak bermakna.
+    # ── Langkah 2: Lindungi kata pola kontekstual ─────────
+    # Kata-kata ini diperlukan agar pola analisis sentimen
+    # bisa bekerja setelah stopword removal.
+    for kata in KATA_POLA_PENTING:
+        base.discard(kata)
+
+    # ── Langkah 3: Tambah noise Twitter/sosmed ────────────
     TWITTER_NOISE: set = {
-        # Artefak Twitter
         "rt", "amp",
-        # Sisa URL setelah cleaning (kadang lolos)
         "https", "http", "co", "pic",
-        # Suara tawa (tidak bermakna untuk sentimen)
         "wkwk", "wkwkwk", "wkwkwkwk",
         "haha", "hahaha", "hehe", "hihi", "huhu", "xixi",
-        # Partikel informal yang tidak bermakna
         "nih", "sih", "dong", "deh", "loh", "lah", "tuh",
         "kak", "gan", "bro", "sob", "min",
     }
@@ -326,8 +359,6 @@ def _load_stemmer():
 
 # ═══════════════════════════════════════════════════════════
 #  FUNGSI 5 TAHAP PREPROCESSING
-#  Setiap fungsi bertanggung jawab SATU tahap saja.
-#  Input & output setiap tahap dijelaskan di docstring.
 # ═══════════════════════════════════════════════════════════
 
 def step1_case_folding(text: str) -> str:
@@ -335,11 +366,6 @@ def step1_case_folding(text: str) -> str:
     TAHAP 1 — CASE FOLDING
     Input : teks asli (campuran huruf besar/kecil)
     Output: semua huruf jadi lowercase
-
-    Kenapa pertama?
-    Agar tahap berikutnya (cleaning, normalisasi) bekerja
-    secara konsisten — regex dan dict lookup case-sensitive.
-    Contoh: "Gratis" → "gratis", "ONGKIR" → "ongkir"
     """
     return str(text).lower()
 
@@ -349,43 +375,25 @@ def step2_cleaning(text: str) -> str:
     TAHAP 2 — CLEANING
     Input : teks lowercase
     Output: teks bersih dari semua elemen noise
-
-    Urutan pembersihan PENTING:
-    1. URL dulu (sebelum @ dan # agar tidak salah potong)
-    2. Mention (@username)
-    3. Hashtag (#topik)
-    4. Angka
-    5. Emoji & simbol unicode
-    6. Tanda baca
-    7. Karakter non-latin (huruf Arab, Cina, dll.)
-    8. Spasi berlebih
     """
-    # 1. Hapus URL (http, https, www)
     text = re.sub(r"http\S+|www\S+|https\S+", "", text)
-    # 2. Hapus mention Twitter (@username)
     text = re.sub(r"@\w+", "", text)
-    # 3. Hapus hashtag (#topik)
     text = re.sub(r"#\w+", "", text)
-    # 4. Hapus angka dan digit
     text = re.sub(r"\d+", "", text)
-    # 5. Hapus emoji & simbol unicode (berbagai range)
     text = re.sub(
         r"["
-        r"\U00010000-\U0010ffff"   # Suplemen karakter unicode
-        r"\U0001F600-\U0001F64F"   # Emotikon wajah
-        r"\U0001F300-\U0001F5FF"   # Simbol & piktogram
-        r"\U0001F680-\U0001F6FF"   # Transport & peta
-        r"\U0001F1E0-\U0001F1FF"   # Bendera negara
-        r"\u2600-\u26FF"           # Simbol campuran
-        r"\u2700-\u27BF"           # Dingbats
+        r"\U00010000-\U0010ffff"
+        r"\U0001F600-\U0001F64F"
+        r"\U0001F300-\U0001F5FF"
+        r"\U0001F680-\U0001F6FF"
+        r"\U0001F1E0-\U0001F1FF"
+        r"\u2600-\u26FF"
+        r"\u2700-\u27BF"
         r"]+",
         "", text, flags=re.UNICODE
     )
-    # 6. Hapus tanda baca (.,!?;: dll.)
     text = text.translate(str.maketrans("", "", string.punctuation))
-    # 7. Hapus karakter non-latin (hanya sisakan huruf a-z dan spasi)
     text = re.sub(r"[^a-zA-Z\s]", "", text)
-    # 8. Normalisasi spasi berlebih → satu spasi, lalu strip
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
@@ -393,22 +401,11 @@ def step2_cleaning(text: str) -> str:
 def step3_normalization(text: str, norm_dict: dict) -> str:
     """
     TAHAP 3 — NORMALISASI
-    Input : teks bersih (sudah case fold + cleaning)
-             norm_dict : kamus {slang: kata_baku} dari file
+    Input : teks bersih + norm_dict dari file
     Output: teks dengan slang/singkatan sudah diganti kata baku
 
-    Cara kerja: token per token (word by word).
-    Setiap token dicari di norm_dict.
-    Jika ada → ganti. Jika tidak ada → biarkan.
-
-    Contoh:
-      "gk bs ongkir" → "tidak bisa ongkos kirim"
-      "mantep bgt"   → "mantap sangat"
-
-    Kenapa setelah Cleaning?
-    Karena slang di file ditulis dalam bentuk sudah lowercase
-    dan sudah tanpa tanda baca. Jika normalisasi dilakukan
-    sebelum cleaning, banyak entri tidak cocok.
+    PERUBAHAN: 'mending' tidak lagi dinormalisasi ke 'lebih baik'.
+    Lihat komentar di _load_normalization() untuk penjelasan.
     """
     tokens = text.split()
     normalized = [norm_dict.get(token, token) for token in tokens]
@@ -418,36 +415,24 @@ def step3_normalization(text: str, norm_dict: dict) -> str:
 def step4_stopword_removal(tokens: list, stopwords: set) -> list:
     """
     TAHAP 4 — STOPWORD REMOVAL
-    Input : list token (hasil split dari teks ternormalisasi)
-             stopwords : set kata yang harus dibuang (dari file)
+    Input : list token + stopwords dari file
     Output: list token bersih
 
-    ATURAN PENYARINGAN (prioritas urutan):
-    1. JAGA token yang ada di KATA_SENTIMEN_PENTING
-       → meskipun juga ada di stopwords, tetap disimpan
-    2. BUANG token yang ada di stopwords
-    3. BUANG token dengan panjang ≤ 2 karakter
-       → menghilangkan sisa noise seperti "rt", "yg", "di"
-       → PENGECUALIAN: token di KATA_SENTIMEN_PENTING tetap disimpan
-         walau ≤ 2 karakter (contoh: "ok" jika masuk sentimen)
-
-    Kenapa setelah Normalisasi?
-    Agar "gak" yang sudah dinormalisasi jadi "tidak" tidak ikut
-    dibuang — "tidak" dilindungi di KATA_SENTIMEN_PENTING.
+    PERUBAHAN: Kata pola penting (mending, daripada, dll.) dilindungi
+    dari pembuangan melalui KATA_POLA_PENTING di _load_stopwords().
     """
     result = []
     for token in tokens:
-        # Prioritas 1: selalu simpan jika kata sentimen penting
         if token in KATA_SENTIMEN_PENTING:
             result.append(token)
             continue
-        # Prioritas 2: buang jika stopword
+        if token in KATA_POLA_PENTING:
+            result.append(token)
+            continue
         if token in stopwords:
             continue
-        # Prioritas 3: buang jika terlalu pendek (noise)
         if len(token) <= 2:
             continue
-        # Lolos semua filter → simpan
         result.append(token)
     return result
 
@@ -456,18 +441,8 @@ def step5_stemming(tokens: list, stemmer) -> list:
     """
     TAHAP 5 — STEMMING
     Input : list token setelah stopword removal
-             stemmer : objek Sastrawi (atau None)
     Output: list token dalam bentuk kata dasar
-
     Algoritma: Enhanced Confix Stripping (ECS) via Sastrawi
-    Contoh:
-      "pengiriman" → "kirim"
-      "pembatasan" → "batas"
-      "berlari"    → "lari"
-      "makanan"    → "makan"
-
-    Jika stemmer None (Sastrawi tidak terinstal), token dikembalikan
-    apa adanya tanpa error.
     """
     if stemmer is None:
         return tokens
@@ -484,37 +459,14 @@ def full_preprocessing(
     norm_dict: dict,
 ) -> dict:
     """
-    Jalankan 5 tahap preprocessing secara berurutan dan kembalikan
-    hasil setiap tahap sebagai dict (untuk ditampilkan di tabel).
-
-    Parameter:
-      text      : teks tweet asli
-      stopwords : set stopword (dari _load_stopwords)
-      stemmer   : objek Sastrawi (dari _load_stemmer)
-      norm_dict : kamus normalisasi (dari _load_normalization)
-
-    Return dict berisi:
-      setelah_casefolding  : hasil Tahap 1
-      setelah_cleaning     : hasil Tahap 2
-      setelah_normalisasi  : hasil Tahap 3
-      setelah_stopword     : hasil Tahap 4 (joined string)
-      clean_text           : hasil akhir Tahap 5 (joined string)
-      _tokens_clean        : hasil Tahap 5 sebagai list (untuk analisis)
+    Jalankan 5 tahap preprocessing secara berurutan.
+    Return dict berisi hasil setiap tahap.
     """
-    # Tahap 1 — Case Folding
     s1_fold = step1_case_folding(text)
-
-    # Tahap 2 — Cleaning
     s2_clean = step2_cleaning(s1_fold)
-
-    # Tahap 3 — Normalisasi (perlu norm_dict)
     s3_norm = step3_normalization(s2_clean, norm_dict)
-
-    # Tahap 4 — Stopword Removal (split → filter → simpan sebagai list)
     s4_tokens = s3_norm.split()
     s4_filtered = step4_stopword_removal(s4_tokens, stopwords)
-
-    # Tahap 5 — Stemming
     s5_stemmed = step5_stemming(s4_filtered, stemmer)
 
     return {
@@ -523,7 +475,7 @@ def full_preprocessing(
         "setelah_normalisasi": s3_norm,
         "setelah_stopword":    " ".join(s4_filtered),
         "clean_text":          " ".join(s5_stemmed),
-        "_tokens_clean":       s5_stemmed,   # list, untuk Counter frekuensi kata
+        "_tokens_clean":       s5_stemmed,
     }
 
 
@@ -711,13 +663,13 @@ def _render_pipeline_steps(stemmer_ok: bool, norm_count: int, sw_count: int):
             "icon": "🔄", "color": "#16a34a", "dark": "#14532d",
             "bg": "linear-gradient(135deg,#f0fdf4,#dcfce7)", "border": "#86efac",
             "title": f'Normalisasi <span class="fix-badge">✦ {norm_count:,} entri</span>',
-            "desc": "Mengubah kata tidak baku, singkatan, dan slang menjadi kata baku (dari file).",
+            "desc": "Mengubah singkatan/slang ke kata baku. 'mending' TIDAK diubah ke 'lebih baik' (perbaikan konteks sentimen).",
             "items": [
                 "gk/ga/gak/kagak/ngga → tidak",
-                "bgt/bngt/bget → sangat",
+                "bgt/bngt/bget → banget",
                 "ongkir → ongkos kirim",
                 "mantep → mantap",
-                "free → gratis",
+                "⚠️ mending → mending (dijaga, bukan 'lebih baik')",
                 f"Total: {norm_count:,} pasang slang→baku dimuat",
             ],
         },
@@ -726,13 +678,13 @@ def _render_pipeline_steps(stemmer_ok: bool, norm_count: int, sw_count: int):
             "icon": "🚫", "color": "#ea580c", "dark": "#7c2d12",
             "bg": "linear-gradient(135deg,#fff7ed,#ffedd5)", "border": "#fed7aa",
             "title": f'Stopword Removal <span class="fix-badge">✦ {sw_count:,} kata</span>',
-            "desc": "Membuang kata umum dari file; kata sentimen DIJAGA.",
+            "desc": "Membuang kata umum; kata sentimen & kata pola kontekstual DIJAGA.",
             "items": [
                 f"{sw_count:,} stopword dimuat dari file",
                 "JAGA negasi: tidak, bukan, jangan, belum",
                 "JAGA positif: keren, bagus, mantap, gratis",
-                "JAGA negatif: kecewa, buruk, gagal, mahal, mending, malah",
-                "JAGA intensitas: sangat, banget, sekali",
+                "JAGA negatif: kecewa, buruk, gagal, mahal",
+                "JAGA pola: mending, daripada, percuma, begini",
                 "Hapus token ≤ 2 karakter (noise)",
             ],
         },
@@ -753,14 +705,12 @@ def _render_pipeline_steps(stemmer_ok: bool, norm_count: int, sw_count: int):
         },
     ]
 
-    # Baris 1: 3 kartu pertama
     row1 = st.columns(3, gap="medium")
     for col, step in zip(row1, steps[:3]):
         _render_step_card(col, step)
 
     _gap("sm")
 
-    # Baris 2: 2 kartu terakhir (tengah agar simetris)
     _, col4, col5, _ = st.columns([0.5, 1, 1, 0.5], gap="medium")
     _render_step_card(col4, steps[3])
     _render_step_card(col5, steps[4])
@@ -964,7 +914,6 @@ def _render_top_words_chart(df_c):
     else:
         all_words = " ".join(df_c["clean_text"].fillna("")).split()
 
-    # Filter minimum 3 karakter (konsisten dengan step4)
     filtered_words = [w for w in all_words if len(w) > 2]
     word_freq = Counter(filtered_words).most_common(20)
 
@@ -1055,14 +1004,10 @@ def show():
         unsafe_allow_html=True
     )
 
-    # ── Muat resource preprocessing (sekali per session) ──────
-    # Semua tiga resource dimuat di sini, bukan di dalam loop,
-    # agar tidak memuat ulang setiap tweet.
     stemmer   = _load_stemmer()
     stopwords = _load_stopwords()
     norm_dict = _load_normalization()
 
-    # ── Pipeline Overview ──────────────────────────────────────
     _section_header(
         "🔬 Alur NLP Pipeline — 5 Tahap Preprocessing",
         "Setiap tweet diproses berurutan melalui 5 tahap sebelum siap dianalisis sentimennya"
@@ -1077,7 +1022,6 @@ def show():
     _render_flow_arrow()
     _gap("md")
 
-    # ── Load data dari database ────────────────────────────────
     try:
         df_all = pd.read_sql("SELECT * FROM tweets ORDER BY created_at DESC", engine)
         if df_all.empty:
@@ -1100,9 +1044,6 @@ def show():
         st.warning(f"⚠️ Tidak ada tweet dengan tanggal asli dalam periode {filter_label}.")
         return
 
-    # ── Cache preprocessing ────────────────────────────────────
-    # Cache key: kombinasi mode + periode + jumlah tweet di DB
-    # Jika ada tweet baru → cache otomatis invalid → proses ulang
     total_tweets_in_db  = get_tweet_count()
     latest_crawl_marker = get_latest_crawl_time() or "no-crawl"
     data_marker         = (total_tweets_in_db, latest_crawl_marker)
@@ -1112,7 +1053,6 @@ def show():
         f"{start_date}_{end_date}_{total_tweets_in_db}_{latest_crawl_marker}"
     )
 
-    # Bersihkan cache lama untuk mode/periode yang sudah tidak aktif
     for old_key in list(st.session_state.keys()):
         if old_key.startswith("pp5_") and old_key != cache_key:
             del st.session_state[old_key]
@@ -1123,7 +1063,6 @@ def show():
         with st.spinner("🧹 Menjalankan 5 tahap preprocessing…"):
             results = []
             for _, row in df.iterrows():
-                # Jalankan 5 tahap — norm_dict diteruskan sebagai parameter
                 r = full_preprocessing(
                     text      = row["text"],
                     stopwords = stopwords,
@@ -1137,9 +1076,7 @@ def show():
                 results.append(r)
 
             df_c = pd.DataFrame(results)
-            # Buang baris yang clean_text-nya kosong setelah semua 5 tahap
             df_c = df_c[df_c["clean_text"].str.strip().str.len() > 0].copy()
-            # Reset index agar rapi
             df_c = df_c.reset_index(drop=True)
 
             st.session_state[cache_key]              = df_c
@@ -1149,7 +1086,6 @@ def show():
     df_c       = st.session_state[cache_key]
     stemmer_ok = st.session_state.get(cache_key + "_sw_ok", False)
 
-    # ── Statistik ──────────────────────────────────────────────
     removed = len(df) - len(df_c)
 
     _section_header(
@@ -1163,7 +1099,6 @@ def show():
     _render_live_example(df_c)
     _gap("lg")
 
-    # ── Tabel ──────────────────────────────────────────────────
     _section_header(
         "📋 Tabel Perbandingan Teks per Tahap",
         f"{len(df_c):,} tweet · {filter_label} — scroll horizontal untuk lihat semua kolom"
@@ -1173,7 +1108,6 @@ def show():
         df_c = df_c.copy()
         df_c["crawled_at"] = pd.NaT
 
-    # Kolom ditampilkan sesuai urutan pipeline
     disp = df_c[[
         "tweet_id", "created_at", "crawled_at",
         "text_asli",
@@ -1223,10 +1157,8 @@ def show():
     _render_top_words_chart(df_c)
     _gap("lg")
 
-    # ── Simpan ke session state untuk halaman sentimen ─────────
     st.session_state["preprocessed_df"] = df_c
 
-    # ── Download ───────────────────────────────────────────────
     st.markdown("""
 <div style="background:#ffffff;border:1.5px solid #e2e8f0;border-radius:14px;
             padding:1.1rem 1.2rem;box-shadow:0 2px 6px rgba(15,23,42,0.05);
