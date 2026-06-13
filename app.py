@@ -3,6 +3,9 @@ from html import escape
 import os
 import time
 
+# ── Splash screen ─────────────────────────────────────────────────────────
+from splash_page import maybe_show_splash
+
 import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
@@ -37,6 +40,10 @@ st.set_page_config(
     page_icon="📊",
     initial_sidebar_state="expanded"
 )
+
+# ── Tampilkan splash saat pertama akses ───────────────────────────────────
+if maybe_show_splash():
+    st.stop()
 
 # Initialize timezone selection in session state
 if "user_timezone" not in st.session_state:
@@ -906,10 +913,10 @@ with st.sidebar:
         ">📊</div>
         <div>
             <div style="font-size:1.02rem;font-weight:800;color:#0f172a;line-height:1.1;">
-                SentimenX
+                SentiTrack
             </div>
             <div style="font-size:0.72rem;color:#64748b;font-weight:600;margin-top:2px;">
-                Twitter Analytics Dashboard
+                Dashboard Monitoring Sentimen Netizen terhadap Kebijakan Pembatasan Gratis Ongkir
             </div>
         </div>
     </div>

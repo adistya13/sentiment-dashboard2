@@ -496,11 +496,7 @@ def _render_page_header():
 <div class="ph-card" style="margin-top:-0.8rem;">
 <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
 <div style="display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;">
-<span style="font-size:0.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:0.07em;margin-right:4px;">&#128269; Query</span>
-<span style="background:#eef2ff;color:#3b6cf7;border:1px solid #c7d2fe;border-radius:999px;padding:4px 13px;font-size:0.72rem;font-weight:700;">komdigi</span>
-<span style="background:#dcfce7;color:#15803d;border:1px solid #bbf7d0;border-radius:999px;padding:4px 13px;font-size:0.72rem;font-weight:700;">gratis ongkir</span>
-<span style="background:#fef3c7;color:#b45309;border:1px solid #fde68a;border-radius:999px;padding:4px 13px;font-size:0.72rem;font-weight:700;">free ongkir</span>
-<span style="background:#fee2e2;color:#b91c1c;border:1px solid #fecaca;border-radius:999px;padding:4px 13px;font-size:0.72rem;font-weight:700;">pembatasan ongkir</span>
+
 </div>
 <div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
 <span style="font-size:0.62rem;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:0.07em;margin-right:4px;">&#9881; Alur kerja</span>
