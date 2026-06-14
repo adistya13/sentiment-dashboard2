@@ -81,6 +81,11 @@ KATA_SENTIMEN_PENTING = {
     "rugi", "boros",
     # Emosi
     "marah", "sedih", "khawatir",
+    
+        # ── TAMBAHAN ────────────────────────────────────────────
+'malas', 'males', 'enggan', 'bete', 'jengkel', 'depresi',
+'gondok', 'dongkol', 'sebal', 'bosan', 'jenuh', 'heran', 'bingung', 'pusing', 'stress', 'panik',
+'kapok', 'muak', 'frustrasi', 'menyesal', 'nyesel', 'mahal',
 }
 
 
@@ -97,66 +102,54 @@ KATA_SENTIMEN_PENTING = {
 # ═══════════════════════════════════════════════════════════
 
 LEXICON_POSITIF = {
-    # Apresiasi murni
-    "bagus", "keren", "mantap", "mantep", "hebat",
-    "oke", "sip", "top", "jos", "goks", "kece", "mantul",
-    "terbaik", "cakep", "cucok", "gaskeun", "kuy",
-    # Dukungan / persetujuan
-    "setuju", "dukung", "mendukung", "pro", "lanjut", "sepakat",
-    # Emosi positif
-    "bangga", "senang", "suka", "puas", "gembira", "bahagia",
-    "syukur", "alhamdulillah",
-    # Keberhasilan
-    "berhasil", "sukses", "berjaya",
-    # Kualitas SDM/institusi
-    "andal", "handal", "gercep", "sigap", "tanggap", "tegas",
-    "adil", "bijak", "bermanfaat", "berguna", "membantu",
-    "inovatif", "maju", "berkembang", "sejahtera", "terpercaya",
-    # Ekonomi / ongkir positif
-    "untung", "gratis", "murah", "hemat", "terjangkau",
-    "efisien", "mudah", "praktis", "cepat", "aman", "andalan",
-    # Solusi
-    "solusi", "menguntungkan", "memuaskan", "membanggakan",
-    "mengagumkan",
-    # ─── DIHAPUS (terlalu kontekstual): ────────────────
-    # "baik"    → "lebih baik X daripada Y" bukan pujian langsung
-    # "benar"   → kontekstual ("itu benar" bisa netral)
-    # "penting" → "lebih penting" bukan pujian
-    # "wajar"   → netral kontekstual
-    # "perlu"   → netral kontekstual
-    # "tepat"   → kontekstual
-    # "jelas"   → kontekstual
-    # "fair"    → kontekstual
-    # "manfaat" → kontekstual
-    # "kompetitif", "saing" → kontekstual
+    'setuju', 'dukung', 'mendukung', 'pro', 'sepakat',
+    'bagus', 'keren', 'mantap', 'mantep', 'bravo',
+    'salut', 'apresiasi', 'hebat', 'oke',
+    'bangga', 'senang', 'suka', 'puas', 'gembira', 'bahagia',
+    'berhasil', 'sukses', 'berjaya',
+    'andal', 'handal', 'gercep', 'bijak', 'bermanfaat',
+    'berguna', 'membantu', 'inovatif',
+    'berantas', 'melindungi', 'perlindungan',
+    'untung', 'menguntungkan', 'solusi', 'memuaskan',
 }
 
 LEXICON_NEGATIF = {
+    # Umpatan
+    'tolol', 'bodoh', 'goblog', 'goblok', 'dungu', 'idiot',
+    'bego', 'anjing', 'bangsat', 'bajingan', 'brengsek',
+    'gila', 'edan', 'biadab',
     # Penilaian buruk
-    "buruk", "jelek", "parah", "rusak", "hancur", "ancur",
-    "gagal", "ambruk", "terpuruk", "bangkrut",
-    "ngaco", "ngasal", "gaje", "receh",
-    "salah", "keliru", "gegabah", "sembarangan", "ngawur",
+    'salah', 'keliru', 'gagal', 'buruk', 'jelek', 'parah', 'mahal',
+    'payah', 'lemah', 'ngawur', 'kacau', 'hancur', 'berantakan', 'gajelas',
     # Ketidakjujuran
-    "bohong", "tipu", "curang", "manipulasi", "korupsi",
-    "kebohongan", "penipuan", "hoax", "kibul",
-    "monopoli", "licik",
-    # Emosi negatif
-    "kecewa", "marah", "sedih", "khawatir", "takut",
-    "benci", "jijik", "muak", "kesal", "frustrasi",
-    "geram", "dongkol",
-    # Ekonomi / ongkir negatif
-    "mahal", "rugi", "merugikan", "rugikan", "overprice",
-    "lambat", "lemot", "lelet", "boros",
-    "memberatkan", "menyulitkan",
-    # Kesulitan / masalah
-    "ribet", "susah", "sulit", "bermasalah", "repot",
-    "ngeributin",
-    # Sifat mengecewakan
-    "mengecewakan", "menyebalkan", "menyusahkan",
-    # Kritik / penolakan
-    "mengeluh", "protes", "menolak", "tolak", "keberatan",
-    "diskriminasi", "zalim",
+    'bohong', 'tipu', 'menipu', 'penipuan', 'curang',
+    'manipulasi', 'korupsi', 'koruptor', 'maling', 'skandal',
+    # EMOSI NEGATIF — ini yang sebelumnya tidak ada
+    'kecewa', 'marah', 'kesal', 'jengkel', 'gondok',
+    'dongkol', 'sebal', 'sebel', 'benci', 'muak',
+    'frustrasi', 'khawatir', 'cemas', 'resah', 'takut',
+    'sedih', 'menyesal', 'nyesel', 'sesal', 'kapok', 'trauma',
+    'malas',      # ROOT CAUSE — wajib ada
+    'males',      # slang malas
+    'enggan', 'bete', 'bosan', 'jenuh',
+    # Penolakan
+    'menolak', 'tolak', 'protes', 'keberatan', 'kontra',
+    # Dampak negatif
+    'merugikan', 'rugikan', 'menyusahkan', 'membebani',
+    'menghambat', 'mengecewakan', 'menyebalkan',
+    # Sindiran
+    'percuma', 'siasia', 'konyol', 'absurd', 'miris',
+    'ironis', 'memalukan', 'memprihatinkan',
+    # Masalah
+    'masalah', 'bermasalah', 'ricuh', 'kacau', 'ribet',
+    'susah', 'sulit', 'rumit',
+    # Domain Komdigi
+    'judol', 'pinjol', 'ngurusin', 'ngurusi', 'urusin',
+    'sibuk', 'melempem',
+    # Seruan negatif
+    'ckckck', 'astaga',
+    # Lain
+    'blokir', 'hambat', 'diskriminasi', 'zalim', 'bocor',
 }
 
 KATA_NEGASI = {
@@ -192,12 +185,21 @@ POLA_KOMPARATIF_NEGATIF = [
 POLA_KRITIK_TERSIRAT = [
     # "tidak penting / gak penting" — dismissif
     (r"\b(tidak|tak|gak|ga|ngga|nggak)\b.{0,15}\bpenting\b",  1),
+    
+    (r"\b(tidak|tak|gak|ga|ngga|nggak)\b.{0,15}\bjelas\b",  1),
+    
+    (r"\b(tidak|tak|gak|ga|ngga|nggak)\b.{0,15}\bbecus\b",  1),
+    
+    
     # "ngapain / buat apa / untuk apa" + konteks kebijakan
     (r"\b(ngapain|buat apa|untuk apa|ngapain)\b.{1,50}\b(kebijakan|ongkir|aturan|regulasi)\b", 2),
     # "gak usah / tidak usah / gak perlu"
     (r"\b(gak|ga|tidak|tak|ngga)\b\s*(usah|perlu)\b",          1),
     # "percuma / sia-sia / buang-buang"
     (r"\b(percuma|sia-sia|buang-buang)\b",                      2),
+    
+    (r"\b(nyusahin|ribet|maksain|susah-susahin)\b",                      2),
+    
     # "mending urusin yang lain / yang lebih penting"
     (r"\bmending\b.{1,30}\b(urusin|urus)\b",                    1),
     # "kebijakan begini / aturan begini" — menyiratkan tidak setuju
@@ -361,6 +363,10 @@ def _load_stopwords() -> set:
         "ngapain",    # penanda kritik tersirat
         "percuma",    # penanda sia-sia
         "begini",     # "kebijakan begini" = kritik tersirat
+        "gajelas",    # "gajelas aja kebijakan ini" = tidak jelas/negatif   
+        "mahal",      # "mahal banget kebijakan ini" = negatif
+        "nyusahin",  # penanda ribet/susah-susahin
+        "malas",      # "malas banget urus kebijakan ini" = negatif
     }
     for kata in KATA_POLA_PENTING:
         base.discard(kata)
@@ -579,8 +585,8 @@ def _hitung_skor_lexicon(teks_lexicon: str) -> dict:
     )
 
     return {
-        "positif":    skor_pos,
-        "negatif":    skor_neg,
+        "positif":    skor_pos,   # ← wajib ada
+        "negatif":    skor_neg,   # ← wajib ada
         "net":        skor_pos - skor_neg,
         "informatif": is_informatif,
     }
@@ -672,13 +678,20 @@ def _klasifikasi_hybrid(
     Return: (label: str, confidence: float)
     """
     net        = skor["net"]
+    skor_pos = skor["positif"]   # ← pastikan dict ini return nilai ini
+    skor_neg = skor["negatif"]   # ← pastikan dict ini return nilai ini
     is_info    = skor.get("informatif", False)
 
-    # ── Layer 0: Override tweet informatif ───────────────────────────────
-    # Tweet yang hanya berisi pelaporan/informasi tanpa sentimen eksplisit
-    # dan net mendekati 0 → langsung Netral agar tidak salah klasifikasi.
-    if is_info and -1 <= net <= 1:
-        return ("Netral", 0.52)
+    # ── TAMBAHAN Layer 0b: Override dominasi kata ─────────
+    # Jika salah satu sisi punya ≥2 kata lebih banyak dari sisi lain,
+    # langsung putuskan tanpa menunggu model NB.
+    if skor_neg >= 2 and skor_neg > skor_pos:
+        conf = min(0.60 + (skor_neg - skor_pos) * 0.05, 0.90)
+        return ("Negatif", round(conf, 3))
+    
+        if skor_pos >= 2 and skor_pos > skor_neg:
+            conf = min(0.60 + (skor_pos - skor_neg) * 0.05, 0.90)
+        return ("Positif", round(conf, 3))
 
     # ── Layer 1a: Positif KUAT ────────────────────────────────────────────
     if net >= 2:

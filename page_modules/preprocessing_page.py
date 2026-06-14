@@ -159,6 +159,18 @@ KATA_SENTIMEN_PENTING = {
     "mendingan",  # variasi mending
     "malah",      # "malah rugi / malah tambah mahal" = negatif
     "percuma",    # "percuma aja kebijakan ini" = sia-sia/negatif
+    "ngapain",    # "ngapain buat kebijakan ini" = kritik tersirat
+    "daripada",   # komponen "mending X daripada Y"
+    "ketimbang",  # variasi daripada
+    "begini",     # "kebijakan begini" = kritik tersirat
+    "gajelas",    # "gajelas aja kebijakan ini" = tidak jelas/negatif
+    "nyusahin",  # "kebijakan ini nyusahin" = ribet/susah-susahin"
+    "malas",      # "malas banget urus kebijakan ini" = negatif
+    
+    # TAMBAHAN — kata emosi negatif
+'malas', 'males', 'enggan', 'bete', 'jengkel', 'depresi',
+'gondok', 'dongkol', 'sebal', 'bosan', 'jenuh', 'heran', 'bingung', 'pusing', 'stress', 'panik',
+'kapok', 'muak', 'frustrasi', 'menyesal', 'nyesel', 'mahal',
 }
 
 
@@ -176,6 +188,9 @@ KATA_POLA_PENTING = {
     "ngapain",    # penanda kritik tersirat
     "percuma",    # penanda sia-sia
     "begini",     # "kebijakan begini" = kritik tersirat
+    "gajelas",    # "gajelas aja kebijakan ini" = tidak jelas/negatif
+    "mahal",      # "mahal banget kebijakan ini" = negatif
+    "nyusahin",  # penanda ribet/susah-susahin
 }
 
 
