@@ -913,7 +913,7 @@ with st.sidebar:
         ">📊</div>
         <div>
             <div style="font-size:1.02rem;font-weight:800;color:#0f172a;line-height:1.1;">
-                SentiTrack
+                OngkirScope
             </div>
             <div style="font-size:0.72rem;color:#64748b;font-weight:600;margin-top:2px;">
                 Dashboard Monitoring Sentimen Netizen terhadap Kebijakan Pembatasan Gratis Ongkir
