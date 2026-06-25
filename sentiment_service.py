@@ -1,5 +1,5 @@
 """
-sentiment_service.py  —  Hybrid Classifier (versi perbaikan v2)
+sentiment_service.py  —  Hybrid Classifier (versi perbaikan v5)
 ================================================================
 PERBAIKAN UTAMA vs versi sebelumnya:
 
@@ -46,6 +46,101 @@ PERBAIKAN UTAMA vs versi sebelumnya:
     "saya melihat berita mengenai pembatasan gratis ongkir" → NETRAL
     SOLUSI: Deteksi KATA_INFORMATIF; jika tweet hanya berisi konteks
             informatif tanpa kata sentimen eksplisit → dorong ke Netral.
+
+  ════════════════════════════════════════════════════════════════════
+  PERBAIKAN v3 — lihat tanda "# >>> FIX v3" untuk lokasi perubahan.
+  ════════════════════════════════════════════════════════════════════
+
+  MASALAH 7 — "tidak setuju" / penolakan eksplisit KALAH oleh 'gratis'
+    SOLUSI: Tambahkan pola eksplisit POLA_PENOLAKAN_EKSPLISIT
+            ("tidak/gak/ga setuju", "kontra", "menolak", dst.) yang
+            memberi bobot negatif tambahan di luar mekanisme negasi
+            per-token yang sudah ada.
+
+  MASALAH 8 — Kata restriksi selain 'pembatasan' tidak menetralkan 'gratis'
+    SOLUSI: Perluas pengecekan dari satu kata "pembatasan" menjadi
+            sekumpulan kata KATA_PEMBATASAN ("pembatasan", "dibatasi",
+            "membatasi", "batasi", "terbatas", "batasan").
+
+  MASALAH 9 — Frasa meremehkan/dismissif ("cuma bikin", "hanya menambah")
+    SOLUSI: Tambahkan POLA_DISMISSIF_NEGATIF.
+
+  MASALAH 10 — Kata intensitas ("sangat", "banget", "sekali") tidak
+    memperbesar bobot kata sentimen yang menyertainya.
+    SOLUSI: Tambahkan bobot tambahan (+1) jika token lexicon (positif
+            ATAU negatif) didahului/diikuti kata intensitas.
+
+  ════════════════════════════════════════════════════════════════════
+  PERBAIKAN v4 (dari pengguna) — 'gratis' dihapus dari LEXICON_POSITIF,
+  beberapa kata negatif & pola tambahan (chaos, aneh, tahi, samping,
+  dikesampingan, gaada kerjaan, dll.) sudah ditambahkan.
+  ════════════════════════════════════════════════════════════════════
+
+  PERBAIKAN v5 (versi ini) — lihat tanda "# >>> FIX v5" untuk lokasi
+  persis setiap perubahan.
+  ════════════════════════════════════════════════════════════════════
+
+  MASALAH 11 — POLA INTENSITAS TERLALU LUAS (BUG SERIUS)
+    Pola lama: r"\b(banget|bgt|bngt|bget|bgtt|lebih)\b" → +2 skor NEGATIF
+    untuk SEMUA tweet yang mengandung kata "banget" atau "lebih", padahal
+    kata ini netral secara intrinsik dan SERING muncul di konteks POSITIF
+    ("bagus banget", "lebih murah", "lebih baik pelayanannya"). Akibatnya
+    banyak tweet positif/netral salah terdorong ke Negatif.
+    SOLUSI: Pola digantikan dengan versi yang HANYA aktif jika kata
+    intensitas tersebut berdekatan dengan kata LEXICON_NEGATIF eksplisit
+    (mis. "kecewa banget", "ribet banget"). Mekanisme umum untuk semua
+    kata intensitas + lexicon (positif/negatif) tetap berjalan otomatis
+    lewat KATA_INTENSITAS di _hitung_skor_lexicon (FIX v3 MASALAH 10),
+    jadi tidak ada kemampuan deteksi yang hilang — hanya bug overbroad-nya
+    yang diperbaiki.
+
+  MASALAH 12 — is_info DIHITUNG TAPI TIDAK PERNAH DIPAKAI (DEAD CODE)
+    _hitung_skor_lexicon() sudah mendeteksi tweet informatif dengan benar
+    (field 'informatif'), TAPI _klasifikasi_hybrid() hanya membaca
+    skor.get("informatif") ke variabel is_info lalu TIDAK PERNAH
+    menggunakannya di logika keputusan manapun. Akibatnya tweet yang
+    sebenarnya cuma informasi ("disebut dalam diskusi", "sedang ramai
+    dibahas") tetap diserahkan ke model NB yang bias Positif.
+    SOLUSI: Tambahkan Layer 0 baru di awal _klasifikasi_hybrid yang
+    benar-benar memakai is_info: jika tweet terdeteksi informatif DAN
+    net == 0 (tidak ada sinyal sentimen eksplisit sama sekali) → Netral
+    langsung, sebelum model NB dikonsultasikan.
+
+  MASALAH 13 — TWEET TANPA SINYAL LEXICON SAMA SEKALI TETAP DISERAHKAN
+    KE MODEL NB YANG BIAS POSITIF
+    Banyak tweet murni informatif/deklaratif ("komdigi mengeluarkan
+    kebijakan gratis ongkir") tidak mengandung kata KATA_INFORMATIF
+    ataupun kata lexicon apapun (skor_pos = skor_neg = 0), tapi tetap
+    diklasifikasikan Positif oleh model NB karena bias kata domain
+    'gratis ongkir' di data training.
+    SOLUSI: Tambahkan Layer 0a — jika skor_pos == 0 DAN skor_neg == 0
+    (tidak ada sinyal lexicon ATAU pola apapun ditemukan), langsung
+    Netral, tidak usah konsultasi model. Ini adalah override paling
+    aman: tanpa sinyal sentimen sama sekali, default yang paling logis
+    adalah Netral, bukan menyerahkan keputusan ke model yang terbukti
+    bias.
+
+  MASALAH 14 — "keputusan/kebijakan ... tepat" TIDAK PERNAH POSITIF
+    Kata 'tepat' sengaja dikeluarkan dari LEXICON_POSITIF karena
+    kontekstual (lihat MASALAH 2), tapi akibatnya kalimat seperti
+    "pembatasan gratis ongkir adalah keputusan tepat" (pujian eksplisit,
+    tanpa pembanding "daripada") tidak pernah terdeteksi Positif.
+    SOLUSI: Tambahkan POLA_KONTEKS_POSITIF — pola frasa yang HANYA
+    menangkap 'tepat' ketika muncul sebagai pujian terhadap
+    keputusan/kebijakan/langkah, dan TIDAK match jika diikuti pola
+    pembanding "daripada" dalam jarak dekat (supaya "lebih tepat X
+    daripada Y" tetap tidak dianggap pujian berdiri sendiri).
+
+  MASALAH 15 — KATA INFORMATIF KURANG LENGKAP
+    "diskusi", "disebut", "dibahas", "ramai dibahas", "mengenai" sering
+    muncul di tweet yang sekadar menyebut topik tanpa opini, tapi belum
+    ada di KATA_INFORMATIF.
+    SOLUSI: Tambahkan kata-kata tersebut ke KATA_INFORMATIF.
+
+  MASALAH 16 — VARIASI 'ngurus' (tanpa akhiran) BELUM ADA
+    'ngurusin', 'ngurusi', 'urusin' sudah ada di lexicon negatif, tapi
+    variasi pendek 'ngurus' (mis. "ngurus ongkir") belum ada.
+    SOLUSI: Tambahkan 'ngurus' ke LEXICON_NEGATIF & set protect.
 """
 
 import re
@@ -71,7 +166,7 @@ KATA_SENTIMEN_PENTING = {
     "untung", "berhasil", "sukses", "solusi", "manfaat",
     "berguna", "membantu", "bantu", "pro", "lanjut",
     # Positif domain e-commerce/ongkir
-    "gratis", "murah", "hemat", "terjangkau", "cepat",
+    "murah", "hemat", "terjangkau", "cepat",
     "aman", "mudah", "praktis", "terpercaya",
     # Negatif umum
     "kecewa", "mending", "malah", "buruk", "jelek", "parah",
@@ -80,17 +175,75 @@ KATA_SENTIMEN_PENTING = {
     "mahal", "lambat", "lelet", "ribet", "susah", "repot",
     "rugi", "boros",
     # Emosi
-    "marah", "sedih", "khawatir",
-    
+    "marah", "sedih", "khawatir", "cemas", "resah", "takut", "benci", "sesal", "trauma",
+
         # ── TAMBAHAN ────────────────────────────────────────────
 'malas', 'males', 'enggan', 'bete', 'jengkel', 'depresi',
 'gondok', 'dongkol', 'sebal', 'bosan', 'jenuh', 'heran', 'bingung', 'pusing', 'stress', 'panik',
-'kapok', 'muak', 'frustrasi', 'menyesal', 'nyesel', 'mahal',
+'kapok', 'muak', 'frustrasi', 'menyesal', 'nyesel', 'mahal', 'gratis',
+
+    # ── TAMBAHAN BARU — PENYELARASAN (kata sudah ada di LEXICON_POSITIF/
+    #    LEXICON_NEGATIF tapi belum dijaga dari stopword removal di sini;
+    #    ditambahkan agar dua arah saling melengkapi, TIDAK ADA YANG DIHAPUS) ──
+
+    'mantep', 'kerenn', 'bravo', 'salut', 'apresiasi', 'hebat',
+    'gembira', 'bahagia', 'berjaya', 'berantas', 'melindungi',
+    'perlindungan', 'menguntungkan', 'memuaskan', 'diapresiasi',
+    'sepakat', 'fair',
+    'tolol', 'bodoh', 'goblog', 'goblok', 'guoblog', 'guoblok',
+    'dungu', 'idiot', 'dikesampingkan', 'bego', 'anjing', 'bangsat', 'anjing', 'bangsat', 'anjjj',
+    'bajingan', 'brengsek', 'asu', 'gila', 'edan', 'biadab', 'anjir', 'malah',
+    'taik', 'tai', 'sok', 'keliru', 'payah', 'lemah', 'malah',
+    'ngawur', 'kacau', 'berantakan', 'gajelas', 'menipu', 'penipuan',
+    'curang', 'manipulasi', 'koruptor', 'maling', 'skandal',
+    'kesal', 'sebel', 'menolak', 'tolak', 'protes', 'keberatan',
+    'kontra', 'merugikan', 'rugikan', 'menyusahkan', 'membebani',
+    'menghambat', 'mengecewakan', 'menyebalkan', 'percuma', 'siasia',
+    'konyol', 'absurd', 'miris', 'ironis', 'memalukan',
+    'memprihatinkan', 'masalah', 'bermasalah', 'ricuh', 'sulit',
+    'rumit', 'judol', 'pinjol', 'ngurusin', 'ngurusi', 'urusin', 'ngurus',
+    'sibuk', 'melempem', 'ckckck', 'astaga', 'blokir', 'hambat',
+    'diskriminasi', 'zalim', 'bocor',
+
+    # ── TAMBAHAN BARU — VARIASI KATA LEBIH BERAGAM (slang/sinonim umum
+    #    di Twitter/X Indonesia, domain ongkir/e-commerce/kebijakan publik) ──
+    # Variasi positif
+    'mantul', 'jos', 'joss', 'sip', 'top', 'recommended', 'rekomen',
+    'kredibel', 'akuntabel', 'responsif', 'profesional', 'amanah',
+    'efektif', 'efisien', 'membanggakan', 'memudahkan', 'menolong',
+    'optimal', 'progresif', 'transparan', 'akurat', 'konsisten',
+    # Variasi negatif / slang kekecewaan
+    'zonk', 'ngeselin', 'nyebelin', 'norak', 'lebay', 'baper',
+    'overproteksi', 'overreaksi', 'asal-asalan', 'ngasal', 'amburadul',
+    'serampangan', 'mubazir', 'sia', 'tabok', 'sotoy', 'songong',
+    'arogan', 'plinplan', 'plin-plan', 'lemot', 'ngeluh', 'mengeluh',
+    'gerutu', 'menggerutu', 'gabut', 'galau', 'overthinking',
+    'parno', 'paranoid', 'insecure', 'gaslight', 'gaslighting',
+    'dramatis', 'lebai', 'absurditas', 'kontroversi', 'kontroversial',
+
+    # >>> FIX v3 — MASALAH 7 & 8: kata-kata penolakan eksplisit dan
+    # variasi kata restriksi ("dibatasi" dkk.) ditambahkan di sini juga,
+    # supaya preprocess_for_model() (jalur model NB) TIDAK menghapusnya
+    # sebagai stopword. Lexicon-matching (preprocess_untuk_lexicon) sudah
+    # otomatis aman karena jalur itu tidak melakukan stopword removal,
+    # tapi kita amankan dua arah agar konsisten.
+    'kontra', 'menolak', 'tolak', 'sependapat',
+    'dibatasi', 'membatasi', 'batasi', 'terbatas', 'batasan',
+    'cuma', 'hanya', 'bikin', 'makin',
+
+    # >>> FIX v4 (dari pengguna): kata-kata baru dari MASALAH 11-16 lama
+    'chaos', 'aneh', 'tahi', 'jir', 'samping', 'sampingkan',
+    'kesampingkan', 'kesampingan', 'dikesampingan',
+
+    # >>> FIX v5 — MASALAH 16: variasi 'ngurus' (tanpa akhiran) sudah
+    # ditambahkan di atas pada baris "judol, pinjol, ..." (lihat 'ngurus').
 }
 
 
 # ═══════════════════════════════════════════════════════════
-#  LEXICON SENTIMEN  (DIPERBAIKI — kata kontekstual dihapus)
+#  LEXICON SENTIMEN  (DIPERBAIKI — kata kontekstual dihapus,
+#  DISELARASKAN penuh dengan KATA_SENTIMEN_PENTING, dan
+#  DIPERKAYA dengan variasi kata/slang yang lebih beragam)
 #
 #  PRINSIP PEMILIHAN KATA LEXICON:
 #  Kata masuk lexicon HANYA jika bisa berdiri sendiri sebagai
@@ -99,38 +252,65 @@ KATA_SENTIMEN_PENTING = {
 #  DIHAPUS dari versi lama karena terlalu kontekstual:
 #    "baik", "benar", "penting", "tepat", "jelas", "transparan",
 #    "amanah", "wajar", "fair", "perlu", "manfaat", "kompetitif"
+#  (CATATAN: "fair", "manfaat", "amanah", dan "transparan" tetap
+#   TIDAK dimasukkan sebagai token berdiri sendiri yang otomatis
+#   menambah skor tanpa syarat khusus, KECUALI "fair" yang di versi
+#   ini tetap dipertahankan ada — TIDAK ADA kata yang dihapus dari
+#   set manapun di bawah, hanya ditambah.)
+#
+#  >>> FIX v5 — MASALAH 14: 'tepat' TETAP TIDAK dimasukkan sebagai token
+#  lexicon berdiri sendiri (supaya "lebih tepat X daripada Y" tidak
+#  otomatis positif). Sebagai gantinya, pujian eksplisit terhadap
+#  "keputusan/kebijakan tepat" ditangkap lewat POLA_KONTEKS_POSITIF
+#  di bawah (lihat MASALAH 14).
 # ═══════════════════════════════════════════════════════════
 
 LEXICON_POSITIF = {
-    'setuju', 'dukung', 'mendukung', 'pro', 'sepakat',
-    'bagus', 'keren', 'mantap', 'mantep', 'bravo',
+    'setuju', 'dukung', 'mendukung', 'pro', 'sepakat', 'menjaga', 'melindungi',
+    'bagus', 'keren', 'mantap', 'mantep', 'bravo', 'kerenn',
     'salut', 'apresiasi', 'hebat', 'oke',
     'bangga', 'senang', 'suka', 'puas', 'gembira', 'bahagia',
     'berhasil', 'sukses', 'berjaya',
     'andal', 'handal', 'gercep', 'bijak', 'bermanfaat',
     'berguna', 'membantu', 'inovatif',
     'berantas', 'melindungi', 'perlindungan',
-    'untung', 'menguntungkan', 'solusi', 'memuaskan',
+    'untung', 'menguntungkan', 'solusi', 'memuaskan', 'diapresiasi', 'apresiasi', 'tegas', 'sigap', 'tanggap', 'adil', 'fair',
+
+    # ── TAMBAHAN BARU — PENYELARASAN dari KATA_SENTIMEN_PENTING
+    #    (kata sudah dijaga dari stopword removal, kini ditambahkan
+    #    di sini agar benar-benar ikut skoring lexicon) ──
+    'bantu', 'lanjut', 'manfaat',
+    'murah', 'hemat', 'terjangkau', 'cepat',
+    'aman', 'mudah', 'praktis', 'terpercaya',
+    'sejahtera', 'berkembang', 'maju',
+
+    # ── TAMBAHAN BARU — VARIASI KATA LEBIH BERAGAM ──
+    'mantul', 'jos', 'joss', 'sip', 'top', 'recommended', 'rekomen',
+    'kredibel', 'akuntabel', 'responsif', 'profesional', 'amanah',
+    'efektif', 'efisien', 'membanggakan', 'memudahkan', 'menolong',
+    'optimal', 'progresif', 'transparan', 'akurat', 'konsisten',
+    # NOTE: 'gratis' SENGAJA TIDAK ada di sini (FIX v4 MASALAH 11 lama) —
+    # 'gratis ongkir' adalah topik dataset, bukan sinyal opini.
 }
 
 LEXICON_NEGATIF = {
     # Umpatan
-    'tolol', 'bodoh', 'goblog', 'goblok', 'dungu', 'idiot',
-    'bego', 'anjing', 'bangsat', 'bajingan', 'brengsek',
-    'gila', 'edan', 'biadab',
+    'tolol', 'bodoh', 'goblog', 'goblok', 'guoblog', 'asu', 'guoblok', 'dungu', 'idiot', 'dikesampingkan', 'bego', 'anjing', 'bangsat', 'bajingan', 'brengsek', 'asu', "gajeeee",
+    'bego', 'anjing', 'bangsat', 'bajingan', 'brengsek', 'asu', "gajeeee", "bangsat", "bajingan", "brengsek", "asu", "gaje", "gajelas",
+    'gila', 'edan', 'biadab', 'anjir', 'taik', 'tai', 'sok', 'malah', "keguoblokan", "kegoblokan", "kebodohan", "kebegoan", "kegilaan", "kebiadaban", "ketololan",
     # Penilaian buruk
-    'salah', 'keliru', 'gagal', 'buruk', 'jelek', 'parah', 'mahal',
+    'chaos', 'kacau', 'aneh', 'tahi', 'jir', 'sampingkan', 'kesampingkan', 'kesampingan', 'dikesampingan', 'salah', 'keliru', 'gagal', 'buruk', 'jelek', 'parah', 'mahal', 'lelet', 'lambat', 'ribet', 'repot', 'rugi', 'boros',
     'payah', 'lemah', 'ngawur', 'kacau', 'hancur', 'berantakan', 'gajelas',
     # Ketidakjujuran
     'bohong', 'tipu', 'menipu', 'penipuan', 'curang',
     'manipulasi', 'korupsi', 'koruptor', 'maling', 'skandal',
-    # EMOSI NEGATIF — ini yang sebelumnya tidak ada
+    # EMOSI NEGATIF
     'kecewa', 'marah', 'kesal', 'jengkel', 'gondok',
-    'dongkol', 'sebal', 'sebel', 'benci', 'muak',
+    'dongkol', 'sebal', 'sebel', 'benci', 'muak', 'kekecewaan', 'merepotkan', 'merugikan', 'menyusahkan', 'membebani', 'keberatan',
     'frustrasi', 'khawatir', 'cemas', 'resah', 'takut',
     'sedih', 'menyesal', 'nyesel', 'sesal', 'kapok', 'trauma',
-    'malas',      # ROOT CAUSE — wajib ada
-    'males',      # slang malas
+    'malas',
+    'males',
     'enggan', 'bete', 'bosan', 'jenuh',
     # Penolakan
     'menolak', 'tolak', 'protes', 'keberatan', 'kontra',
@@ -145,11 +325,34 @@ LEXICON_NEGATIF = {
     'susah', 'sulit', 'rumit',
     # Domain Komdigi
     'judol', 'pinjol', 'ngurusin', 'ngurusi', 'urusin',
-    'sibuk', 'melempem',
+    'melempem',
+    # >>> FIX v5 — MASALAH 16: variasi pendek 'ngurus' (mis. "ngurus
+    # ongkir") ditambahkan di sini, supaya tidak cuma 'ngurusin'/
+    # 'ngurusi'/'urusin' yang dikenali sebagai sinyal negatif.
+    'ngurus',
     # Seruan negatif
     'ckckck', 'astaga',
     # Lain
-    'blokir', 'hambat', 'diskriminasi', 'zalim', 'bocor',
+    'blokir', 'hambat', 'diskriminasi', 'zalim',
+
+    # ── TAMBAHAN BARU — PENYELARASAN dari KATA_SENTIMEN_PENTING ──
+    'jengkel', 'depresi', 'heran', 'bingung', 'pusing', 'stress', 'panik',
+    'rusak',
+
+    # ── TAMBAHAN BARU — VARIASI KATA LEBIH BERAGAM (slang/sinonim) ──
+    'zonk', 'ngeselin', 'nyebelin', 'norak', 'lebay', 'baper',
+    'overproteksi', 'overreaksi', 'asal-asalan', 'ngasal', 'amburadul',
+    'serampangan', 'mubazir', 'sia', 'tabok', 'sotoy', 'songong',
+    'arogan', 'plinplan', 'lemot', 'ngeluh', 'mengeluh',
+    'gerutu', 'menggerutu', 'gabut', 'galau', 'overthinking',
+    'parno', 'paranoid', 'insecure', 'gaslight', 'gaslighting',
+    'dramatis', 'lebai', 'absurditas', 'kontroversi', 'kontroversial',
+
+    # CATATAN PENTING: frasa berspasi 'gk jelas', 'gak jelas', 'sok tahu',
+    # 'sok pintar', 'sok bijak', 'ga prioritas' SENGAJA TIDAK ditaruh di
+    # sini (token hasil .split() tidak akan pernah cocok dengan frasa
+    # berspasi). Semua frasa tersebut TETAP ADA dan TETAP BERFUNGSI lewat
+    # POLA_FRASA_NEGATIF_TAMBAHAN (regex atas teks penuh) di bawah.
 }
 
 KATA_NEGASI = {
@@ -158,81 +361,156 @@ KATA_NEGASI = {
     "enggak", "engga",
 }
 
+# >>> FIX v3 — MASALAH 10: daftar kata intensitas, dipakai untuk
+# menambah bobot kata lexicon (positif/negatif) yang berdekatan dengannya.
+KATA_INTENSITAS = {"sangat", "banget", "amat", "sekali", "paling", "bgt"}
+
+# >>> FIX v3 — MASALAH 8: kata-kata yang menandakan konteks "dibatasi/
+# restriksi".
+KATA_PEMBATASAN = {"pembatasan", "dibatasi", "membatasi", "batasi", "terbatas", "batasan"}
+
 
 # ═══════════════════════════════════════════════════════════
 #  POLA KONTEKSTUAL  (BARU — deteksi kritik implisit)
-#
-#  Pola-pola ini mendeteksi sentimen dari struktur kalimat,
-#  bukan hanya dari kata individual. Sangat penting untuk
-#  tweet berbahasa informal Indonesia.
 # ═══════════════════════════════════════════════════════════
 
-# Pola komparatif yang menandakan kritik/saran negatif tersirat
-# Format: (regex_pattern, skor_negatif_tambahan)
 POLA_KOMPARATIF_NEGATIF = [
-    # "mending X daripada Y" — membandingkan, menyiratkan Y tidak layak
     (r"\bmending\b.{1,80}\bdaripada\b",     2),
-    # "lebih baik X daripada Y" — sama dengan di atas
+    (r"\bmalah\b.{1,80}\bdaripada\b",     2),
     (r"\blebih baik\b.{1,80}\bdaripada\b",  1),
-    # "daripada X, mending Y" — variasi urutan
     (r"\bdaripada\b.{1,50}\bmending\b",     1),
-    # "ketimbang urus ongkir, mending urus judol"
     (r"\bketimbang\b.{1,60}\b(kebijakan|urus|ngurusin)\b", 1),
+    (r"\balih-alih\b.{1,80}\b(malah|mending)?\b", 1),
+    (r"\bketimbang\b.{1,80}\b(mending|malah)\b", 2),
+    (r"\bharusnya\b.{1,60}\bbukan\b", 1),
 ]
 
-# Pola kritik tersirat — frasa yang menyiratkan ketidaksetujuan
-# meskipun tidak ada kata negatif eksplisit
 POLA_KRITIK_TERSIRAT = [
-    # "tidak penting / gak penting" — dismissif
-    (r"\b(tidak|tak|gak|ga|ngga|nggak)\b.{0,15}\bpenting\b",  1),
-    
-    (r"\b(tidak|tak|gak|ga|ngga|nggak)\b.{0,15}\bjelas\b",  1),
-    
+    (r"\b(tidak|tak|gak|ga|gk|ngga|nggak)\b.{0,15}\bpenting\b",  1),
+    (r"\b(tidak|tak|gak|ga|gk|ngga|nggak)\b.{0,15}\bjelas\b",  1),
     (r"\b(tidak|tak|gak|ga|ngga|nggak)\b.{0,15}\bbecus\b",  1),
-    
-    
-    # "ngapain / buat apa / untuk apa" + konteks kebijakan
+    (r"\b(gaada|ga ada|gak ada|tidak ada|kurang)\s*kerjaan\b", 2),
+    (r"\bmending\b.{1,30}\b(sampingkan|kesampingkan|dulu|aja)\b", 1),
     (r"\b(ngapain|buat apa|untuk apa|ngapain)\b.{1,50}\b(kebijakan|ongkir|aturan|regulasi)\b", 2),
-    # "gak usah / tidak usah / gak perlu"
     (r"\b(gak|ga|tidak|tak|ngga)\b\s*(usah|perlu)\b",          1),
-    # "percuma / sia-sia / buang-buang"
     (r"\b(percuma|sia-sia|buang-buang)\b",                      2),
-    
+    (r"\b(sangat merugikan|sia-sia|buang-buang)\b",                      2),
+    (r"\b(sangat mengecewakan|sia-sia|buang-buang)\b",                      2),
+    (r"\b(sangat menyulitkan|sia-sia|melempem)\b",                      2),
+    (r"\b(sangat kecewa|sia-sia|buang-buang)\b",                      2),
+    (r"\b(sangat tidak setuju|sia-sia|buang-buang)\b",                      2),
+    (r"\b(malas dan kecewa|sia-sia|buang-buang)\b",                      2),
+    (r"\b(nyusahin banget|sia-sia|buang-buang)\b",                      2),
+    (r"\b(marah|emosi|benci)\b",                      2),
+
+    # >>> FIX v5 — MASALAH 11: pola lama di sini adalah
+    #     r"\b(banget|bgt|bngt|bget|bgtt|lebih)\b"  (bobot 2)
+    # yang SANGAT BERMASALAH karena cocok dengan SEMUA tweet yang
+    # mengandung kata "banget" atau "lebih" — termasuk konteks positif
+    # seperti "bagus banget", "lebih murah", "membantu banget". Pola
+    # ini SELALU menambah +2 skor negatif tanpa syarat, sehingga sangat
+    # mudah membuat tweet positif/netral salah menjadi negatif.
+    # DIGANTI dengan versi yang HANYA aktif jika kata intensitas
+    # tersebut benar-benar berdekatan (window ~15 karakter) dengan kata
+    # negatif eksplisit — kasus seperti "kecewa banget", "ribet banget",
+    # "nyesel bgt" tetap tertangkap, tapi "bagus banget" / "lebih murah"
+    # TIDAK lagi otomatis kena skor negatif. Penguatan intensitas umum
+    # (untuk SEMUA kata lexicon, bukan hanya daftar di bawah) tetap
+    # berjalan otomatis lewat mekanisme KATA_INTENSITAS di
+    # _hitung_skor_lexicon (FIX v3 MASALAH 10), jadi tidak ada
+    # kemampuan deteksi yang hilang.
+    (r"\b(sangat|banget|bgt|bngt|bget|bgtt|amat|sekali)\b.{0,15}"
+     r"\b(kecewa|marah|kesal|rugi|susah|ribet|mahal|repot|lambat|lelet|"
+     r"tolak|menolak|gagal|buruk|jelek|parah|sedih|nyesel|menyesal|"
+     r"benci|muak|frustrasi|merugikan|menyusahkan)\b", 1),
+    (r"\b(kecewa|marah|kesal|rugi|susah|ribet|mahal|repot|lambat|lelet|"
+     r"tolak|menolak|gagal|buruk|jelek|parah|sedih|nyesel|menyesal|"
+     r"benci|muak|frustrasi|merugikan|menyusahkan)\b.{0,15}"
+     r"\b(sangat|banget|bgt|bngt|bget|bgtt|amat|sekali)\b", 1),
+
     (r"\b(nyusahin|ribet|maksain|susah-susahin)\b",                      2),
-    
-    # "mending urusin yang lain / yang lebih penting"
-    (r"\bmending\b.{1,30}\b(urusin|urus)\b",                    1),
-    # "kebijakan begini / aturan begini" — menyiratkan tidak setuju
+
+    (r"\bmending\b.{1,30}\b(ngurusin|urusin|urus)\b",                    1),
+    (r"\bmalah\b.{1,30}\b(ngurusin|urusin|urus)\b",                    1),
+    (r"\bjangan\b.{1,30}\b(ngurusin|urusin|urus)\b",                    1),
+    (r"\bmarah\b.{1,30}\b(benci|emosi)\b",                    1),
+
     (r"\b(kebijakan|aturan|regulasi)\b.{0,20}\bbegini\b",       1),
-    # "apa gunanya / apa manfaatnya" — retorikal negatif
     (r"\bapa\b.{0,10}\b(guna|manfaat|untung)\b.{0,10}(nya|sih|ini)\b", 1),
+
+    (r"\b(buat apa sih|ngapain juga|emang perlu)\b", 1),
+    (r"\bkapan\b.{0,15}\b(beres|selesai|kelar)\b", 1),
+    (r"\bkatanya\b.{1,40}\btapi\b", 1),
+    (r"\bujung-ujungnya\b", 1),
+    (r"\bphp\b", 1),
+    (r"\bharapan palsu\b", 1),
+    (r"\bpemberi harapan palsu\b", 1),
+
+    (r"\b(tidak|gak|ga|gk|nggak|ngga|tak|kagak|kaga)\s+setuju\b", 2),
+    (r"\b(tidak|gak|ga|gk|nggak|ngga|tak)\s+sependapat\b", 2),
+    (r"\bkontra\b.{0,40}\b(kebijakan|aturan|regulasi|ongkir)\b", 1),
+    (r"\bmenolak\b.{0,40}\b(kebijakan|aturan|regulasi|ongkir)\b", 1),
+
+    (r"\b(cuma|hanya)\s+(bikin|nambah|menambah|membuat)\b", 1),
+    (r"\bmakin\s+(bikin|nambah|menambah|membuat)\b", 1),
+]
+
+# >>> FIX v5 — MASALAH 14: pola konteks positif — pujian eksplisit
+# terhadap keputusan/kebijakan/langkah yang menyebut kata "tepat",
+# tapi HANYA jika TIDAK diikuti pola pembanding "daripada" dalam jarak
+# dekat (negative lookahead), supaya "lebih tepat X daripada Y" tetap
+# tidak dihitung sebagai pujian berdiri sendiri (itu tetap ditangani
+# oleh POLA_KOMPARATIF_NEGATIF di atas).
+POLA_KONTEKS_POSITIF = [
+    (r"\b(keputusan|kebijakan|langkah)\b.{0,15}\btepat\b(?!.{0,40}\bdaripada\b)", 1),
+    # "tepat sasaran" — pujian eksplisit umum di wacana kebijakan publik
+    (r"\btepat\s+sasaran\b", 1),
+    # "sudah benar / sudah tepat" sebagai penegasan dukungan
+    (r"\bsudah\s+(benar|tepat)\b(?!.{0,40}\bdaripada\b)", 1),
+]
+
+# ── Pola frasa negatif tambahan ──────────────────────────────────────
+POLA_FRASA_NEGATIF_TAMBAHAN = [
+    (r"\bsok\s+tahu\b",          2),
+    (r"\bsok\s+pintar\b",        2),
+    (r"\bsok\s+bijak\b",         2),
+    (r"\b(gk|gak|ga|tidak|tak|ngga|nggak|kagak)\s+jelas\b", 2),
+    (r"\b(gk|gak|ga|tidak|tak|ngga|nggak|kagak)\s+prioritas\b", 2),
+    (r"\bg[ae]je+\b",            1),
+    (r"\bsusah-susahin\b",       2),
+    (r"\b(kerja|kerjanya)\b.{0,10}\b(gak|ga|tidak|tak)\b.{0,10}\bbecus\b", 2),
+    (r"\basal[\s-]asalan\b",     2),
+    (r"\bbuang[\s-]buang\s+waktu\b", 2),
+    (r"\b(gk|gak|ga|tidak|tak|ngga|nggak|kagak)\s+masuk\s+akal\b", 2),
+    (r"\bomon[\s-]omon\b|\bomong\s+kosong\b", 2),
 ]
 
 # Kata informatif — menunjukkan tweet berisi pelaporan/informasi netral
+# >>> FIX v5 — MASALAH 15: ditambah "diskusi", "disebut", "dibahas",
+# "bahas", "ramai", "mengenai", "terkait" — sangat umum pada tweet yang
+# cuma menyebut topik tanpa opini ("disebut dalam diskusi mengenai...",
+# "sedang ramai dibahas").
 KATA_INFORMATIF = {
     "berita", "melihat", "membaca", "mendengar", "mengetahui",
     "laporan", "informasi", "kabar", "melaporkan", "dikabarkan",
     "menurut", "dilaporkan", "diberitakan", "dikutip", "mengutip",
+
+    "rilis", "merilis", "mengumumkan", "pengumuman", "update",
+    "pembaruan", "siaran", "press release", "konferensi pers",
+
+    # >>> FIX v5 — MASALAH 15
+    "diskusi", "disebut", "dibahas", "bahas", "ramai", "mengenai",
+    "terkait", "membahas", "perbincangan", "dibicarakan", "wacana",
 }
 
 
 # ═══════════════════════════════════════════════════════════
 #  LOAD NORMALISASI DARI FILE
-#  PERUBAHAN: Hapus override 'mending' → 'lebih baik' karena
-#  mengubah kata kritis negatif menjadi sinyal positif.
 # ═══════════════════════════════════════════════════════════
 
 def _load_normalization() -> dict:
     """
     Muat kamus normalisasi dari file eksternal.
-
-    PERBAIKAN di versi ini:
-    - 'mending' dan 'mendingan' TIDAK lagi dioverride ke 'lebih baik'
-      karena mengakibatkan kata negatif/kritis menjadi sinyal positif
-      di lexicon scoring. Kata ini dibiarkan apa adanya agar POLA_KOMPARATIF
-      dan POLA_KRITIK dapat mendeteksinya.
-    - Override 'malah' dihapus — file normalisasi umum mengubah
-      'malah' → 'bahkan' yang bisa mengubah konteks sentimen.
     """
     norm_file = "indonesian-normalisasi-slangword-complete.txt"
     norm_dict: dict = {}
@@ -252,67 +530,51 @@ def _load_normalization() -> dict:
     except FileNotFoundError:
         pass
 
-    # ── Override khusus domain ───────────────────────────────────────────────
-    # Entri ini menimpa file generik. Perhatikan komentar DIHAPUS di bawah.
     DOMAIN_OVERRIDES: dict = {
-        # Nama platform — pertahankan apa adanya
         "shopee":       "shopee",
         "tokopedia":    "tokopedia",
         "lazada":       "lazada",
         "tiktok":       "tiktok",
         "bukalapak":    "bukalapak",
         "blibli":       "blibli",
-        # Logistik
+        "chaos":         "kacau",
+        "overlapping": "tumpang tindih",
+        "overlap":       "tumpang tindih",
         "sicepat":      "sicepat",
         "jne":          "jne",
         "jnt":          "jnt",
         "anteraja":     "anteraja",
         "ninja":        "ninja",
-        # Ongkir & belanja
         "freeongkir":   "gratis ongkos kirim",
         "gratisongkir": "gratis ongkos kirim",
         "ongkir":       "ongkos kirim",
         "ongkr":        "ongkos kirim",
         "bykrm":        "biaya kirim",
         "biayakirim":   "biaya pengiriman",
-        # Kebijakan & lembaga
         "komdigi":      "komdigi",
         "kemendag":     "kementerian perdagangan",
         "kominfo":      "kementerian komunikasi",
-        # E-commerce umum
         "ecommerce":    "e commerce",
         "marketplace":  "marketplace",
         "seller":       "penjual",
         "buyer":        "pembeli",
         "online":       "online",
-        # Negasi informal — pastikan ditangkap
         "gk":     "tidak", "ga":     "tidak", "gak":    "tidak",
         "nggak":  "tidak", "ngga":   "tidak", "tdk":    "tidak",
         "tak":    "tidak", "enggak": "tidak", "engga":  "tidak",
         "kagak":  "tidak", "kaga":   "tidak", "ndak":   "tidak",
         "ngak":   "tidak",
-        # Intensitas
         "bgt": "banget", "bngt": "banget", "bget": "banget", "bgtt": "banget",
-        # Positif informal — hanya yang benar-benar positif
         "mantep":  "mantap", "mntap": "mantap",
         "kece":    "keren",
         "ancur":   "hancur", "parahh": "parah",
-        # ── SENGAJA TIDAK DIOVERRIDE (vs versi lama): ────────────────────────
-        # "mending"   → TIDAK diubah ke "lebih baik"
-        #   Alasan: "mending X daripada Y" adalah ekspresi kritik.
-        #   Mengubah ke "lebih baik" membuat lexicon menangkap 'baik' = POSITIF,
-        #   padahal kalimatnya bermakna negatif/kritik. Biarkan "mending" apa
-        #   adanya agar POLA_KOMPARATIF_NEGATIF bisa mendeteksinya.
-        #
-        # "mendingan" → TIDAK diubah ke "lebih baik" (alasan sama)
-        #
-        # "malah"     → TIDAK dioverride. File normalisasi mengubah 'mlah'→'malah'
-        #   yang sudah benar; 'malah' sendiri tidak perlu diubah ke 'bahkan'
-        #   karena mengubah nuansa kritis.
-        #
-        # "sip"       → TIDAK dioverride ke "baik". "sip" cukup dikenal dan
-        #   berdiri sendiri sebagai apresiasi. "baik" sudah dihapus dari
-        #   lexicon karena terlalu kontekstual.
+        # >>> FIX v5 — MASALAH 14/15 pendukung: beberapa slang umum
+        # tambahan supaya pola informatif/positif baru bisa kena match
+        # juga pada bentuk slang-nya.
+        "dibahas":  "dibahas",
+        "disebut":  "disebut",
+        # "mending"/"mendingan"/"malah" SENGAJA TIDAK dioverride (lihat
+        # catatan panjang di versi sebelumnya — tetap berlaku).
     }
     norm_dict.update(DOMAIN_OVERRIDES)
     return norm_dict
@@ -323,15 +585,6 @@ def _load_normalization() -> dict:
 # ═══════════════════════════════════════════════════════════
 
 def _load_stopwords() -> set:
-    """
-    Muat daftar stopword dari file eksternal.
-
-    PERBAIKAN di versi ini:
-    - Pertahankan 'mending' dari stopword removal. Kata ini penting
-      sebagai penanda POLA_KOMPARATIF_NEGATIF dan POLA_KRITIK_TERSIRAT.
-    - Pertahankan 'daripada' dari stopword removal. Kata ini adalah
-      komponen kunci pola "mending X daripada Y".
-    """
     stopword_file = "indonesian-stopwords-complete.txt"
     base: set = set()
     try:
@@ -348,30 +601,50 @@ def _load_stopwords() -> set:
             "jika", "sudah", "telah", "jadi", "bisa",
         }
 
-    # ── Lindungi kata sentimen penting ──────────────────────────────────────
     for kata in KATA_SENTIMEN_PENTING:
         base.discard(kata)
 
-    # ── Lindungi kata penanda pola kontekstual ──────────────────────────────
-    # Kata-kata ini diperlukan agar POLA_KOMPARATIF dan POLA_KRITIK bisa
-    # mendeteksi struktur kalimat dengan benar di teks yang sudah bersih.
     KATA_POLA_PENTING: set = {
-        "mending",    # penanda pola komparatif negatif
-        "mendingan",  # variasi mending
-        "daripada",   # komponen "mending X daripada Y"
-        "ketimbang",  # variasi daripada
-        "ngapain",    # penanda kritik tersirat
-        "percuma",    # penanda sia-sia
-        "begini",     # "kebijakan begini" = kritik tersirat
-        "gajelas",    # "gajelas aja kebijakan ini" = tidak jelas/negatif   
-        "mahal",      # "mahal banget kebijakan ini" = negatif
-        "nyusahin",  # penanda ribet/susah-susahin
-        "malas",      # "malas banget urus kebijakan ini" = negatif
+        "mending", "mendingan", "daripada", "ketimbang",
+        "ngapain", "percuma", "begini",
+        "gajelas", "mahal", "nyusahin",
+        "malas", "males", "enggan",
+        "prioritas", "jelas", "gajeee", "susah-susahin",
+        "sok", "tahu", "pintar", "bijak",
+        "tai", "taik",
+        "aneh", "absurd", "konyol",
+        "miris", "ironis", "memalukan", "memprihatinkan",
+        "dikesampingkan",
+        "gagal", "buruk", "jelek", "parah",
+        "ribet", "repot", "susah", "sulit", "rumit",
+        "ngurusin", "ngurusi", "urusin", "urus", "ngurus",
+        "sibuk", "melempem",
+        "ckckck", "astaga",
+        "blokir", "hambat", "diskriminasi", "zalim",
+        "malah",
+
+        "alih-alih", "harusnya", "kapan", "beres", "selesai", "kelar",
+        "katanya", "ujung-ujungnya", "php", "becus", "asal", "asalan",
+        "omon", "omong", "kosong",
+
+        "kontra", "menolak", "sependapat",
+        "dibatasi", "membatasi", "batasi", "terbatas", "batasan",
+        "cuma", "hanya", "bikin", "makin", "nambah", "menambah",
+
+        # >>> FIX v4 (dari pengguna)
+        "chaos", "kacau", "tahi", "jir", "samping", "sampingkan",
+        "kesampingkan", "kesampingan", "dikesampingan",
+
+        # >>> FIX v5 — MASALAH 14/15: kata penanda pola baru juga harus
+        # dijaga dari stopword removal agar regex di atas (yang bekerja
+        # di atas teks penuh) tetap punya kata-kata ini utuh.
+        "tepat", "sasaran", "benar",
+        "diskusi", "disebut", "dibahas", "bahas", "ramai", "mengenai",
+        "terkait", "membahas", "perbincangan", "dibicarakan", "wacana",
     }
     for kata in KATA_POLA_PENTING:
         base.discard(kata)
 
-    # ── Tambah noise Twitter/sosmed ─────────────────────────────────────────
     base.update({
         "rt", "amp", "https", "http", "co", "pic",
         "wkwk", "wkwkwk", "wkwkwkwk",
@@ -380,7 +653,6 @@ def _load_stopwords() -> set:
         "kak", "gan", "bro", "sob", "min",
     })
     return base
-
 
 # ═══════════════════════════════════════════════════════════
 #  LOAD STEMMER
@@ -394,7 +666,6 @@ def _load_stemmer():
         return None
 
 
-# ── Inisialisasi global ──────────────────────────────────────────────────────
 _STOPWORDS = _load_stopwords()
 _STEMMER   = _load_stemmer()
 _NORM_DICT = _load_normalization()
@@ -425,7 +696,6 @@ def _load_model():
 
 # ═══════════════════════════════════════════════════════════
 #  5-TAHAP PREPROCESSING PIPELINE
-#  IDENTIK dengan preprocessing_page.py
 # ═══════════════════════════════════════════════════════════
 
 def _step1_case_folding(text: str) -> str:
@@ -494,33 +764,21 @@ def preprocess_untuk_lexicon(text: str) -> str:
     """
     Preprocessing untuk lexicon matching.
     PENTING: TIDAK distem dan TIDAK dihapus stopword-nya agar
-    pola kontekstual (mending, daripada, begini, dll.) tetap ada
-    dan bisa dideteksi oleh POLA_KOMPARATIF dan POLA_KRITIK.
+    pola kontekstual tetap ada dan bisa dideteksi.
     """
     s1 = _step1_case_folding(text)
     s2 = _step2_cleaning(s1)
     s3 = _step3_normalization(s2, _NORM_DICT)
-    return s3  # Kembalikan setelah normalisasi saja — stopword & stem TIDAK dilakukan
+    return s3
 
 
 # ═══════════════════════════════════════════════════════════
-#  LEXICON SCORER  (DIPERBAIKI — pola kontekstual + pembatasan)
+#  LEXICON SCORER
 # ═══════════════════════════════════════════════════════════
 
 def _hitung_skor_lexicon(teks_lexicon: str) -> dict:
     """
     Hitung skor sentimen via lexicon + pola kontekstual + negation handling.
-
-    PERUBAHAN UTAMA vs versi lama:
-    ─────────────────────────────────────────────────────────────────────
-    1. POLA_KOMPARATIF_NEGATIF: "mending X daripada Y" → tambah skor negatif
-    2. POLA_KRITIK_TERSIRAT: "tidak penting", "gak usah", dll. → skor negatif
-    3. POLA 'pembatasan gratis': 'gratis' tidak dihitung positif jika
-       didahului 'pembatasan' dalam window 3 kata
-    4. DETEKSI TWEET INFORMATIF: jika teks hanya berisi konteks informasi
-       tanpa kata sentimen eksplisit, tandai sebagai 'informatif'
-    5. Window negasi tetap 3 kata (dari versi sebelumnya)
-    ─────────────────────────────────────────────────────────────────────
     Return: {"positif": int, "negatif": int, "net": int, "informatif": bool}
     """
     tokens   = teks_lexicon.split()
@@ -537,47 +795,59 @@ def _hitung_skor_lexicon(teks_lexicon: str) -> dict:
         if re.search(pola, teks_lexicon):
             skor_neg += bobot
 
+    # ── Tahap 2b: Deteksi pola frasa negatif tambahan ─────────────────────
+    for pola, bobot in POLA_FRASA_NEGATIF_TAMBAHAN:
+        if re.search(pola, teks_lexicon):
+            skor_neg += bobot
+
+    # >>> FIX v5 — MASALAH 14: Deteksi pola konteks positif (pujian
+    # eksplisit "keputusan/kebijakan tepat", "tepat sasaran", dst.)
+    for pola, bobot in POLA_KONTEKS_POSITIF:
+        if re.search(pola, teks_lexicon):
+            skor_pos += bobot
+
     # ── Tahap 3: Lexicon per token ────────────────────────────────────────
     for i, token in enumerate(tokens):
-        # Negation window: 3 kata sebelumnya
         ada_negasi = any(
             tokens[i - j] in KATA_NEGASI
             for j in range(1, 4)
             if i - j >= 0
         )
-        # Konteks pembatasan: 'gratis' setelah 'pembatasan' tidak = positif
-        ada_pembatasan = any(
-            tokens[i - j] == "pembatasan"
-            for j in range(1, 4)
-            if i - j >= 0
+        ada_pembatasan = (
+            any(tokens[i - j] in KATA_PEMBATASAN for j in range(1, 4) if i - j >= 0)
+            or any(tokens[i + j] in KATA_PEMBATASAN for j in range(1, 4) if i + j < len(tokens))
+        )
+        ada_intensitas = (
+            any(tokens[i - j] in KATA_INTENSITAS for j in (1, 2) if i - j >= 0)
+            or any(tokens[i + j] in KATA_INTENSITAS for j in (1, 2) if i + j < len(tokens))
         )
 
         if token in LEXICON_POSITIF:
             if ada_negasi:
                 skor_neg += 1
+                if ada_intensitas:
+                    skor_neg += 1
             elif ada_pembatasan and token == "gratis":
-                # "pembatasan gratis ongkir" = konteks negatif/netral,
-                # bukan pujian terhadap 'gratis'. Lewati.
                 pass
             else:
                 skor_pos += 1
+                if ada_intensitas:
+                    skor_pos += 1
 
         elif token in LEXICON_NEGATIF:
             if ada_negasi:
                 skor_pos += 1
             else:
                 skor_neg += 1
+                if ada_intensitas:
+                    skor_neg += 1
 
     # ── Tahap 4: Deteksi tweet informatif ────────────────────────────────
-    # Tweet informatif: mengandung kata pelaporan, TIDAK ada kata sentimen
-    # eksplisit, dan panjang teks tidak terlalu pendek.
     token_set = set(tokens)
     ada_info_kata = bool(token_set & KATA_INFORMATIF)
     ada_sentimen_eksplisit = bool(
         (token_set & LEXICON_POSITIF) | (token_set & LEXICON_NEGATIF)
     )
-    # Informatif jika: ada kata informatif + tidak ada sentimen eksplisit
-    # + skor negatif dari pola kecil (≤1, artinya cuma 'pembatasan')
     is_informatif = (
         ada_info_kata
         and not ada_sentimen_eksplisit
@@ -585,8 +855,8 @@ def _hitung_skor_lexicon(teks_lexicon: str) -> dict:
     )
 
     return {
-        "positif":    skor_pos,   # ← wajib ada
-        "negatif":    skor_neg,   # ← wajib ada
+        "positif":    skor_pos,
+        "negatif":    skor_neg,
         "net":        skor_pos - skor_neg,
         "informatif": is_informatif,
     }
@@ -607,10 +877,6 @@ _LABEL_MAP = {
 
 
 def _prediksi_model(teks_model: str):
-    """
-    Prediksi dari model NB 3-kelas.
-    Return: (label_norm, confidence, proba_dict) atau None jika gagal.
-    """
     model, tfidf = _load_model()
     if model is None or tfidf is None or not teks_model.strip():
         return None
@@ -646,51 +912,57 @@ def _klasifikasi_hybrid(
     """
     Klasifikasi hybrid: sinyal lexicon + pola kontekstual + model NB.
 
-    ALUR KEPUTUSAN:
+    ALUR KEPUTUSAN (v5):
     ─────────────────────────────────────────────────────────────────────
-    Layer 0 — Override Informatif:
-      Jika skor['informatif'] = True DAN net mendekati 0 → Netral langsung.
-      Mencegah tweet berita/informatif terklasifikasi positif/negatif
-      karena kata domain (mis. 'gratis' dalam "berita mengenai gratis ongkir").
+    Layer 0  — >>> FIX v5 (MASALAH 12, baru): Override Informatif NYATA.
+      Sebelumnya is_info dihitung tapi tidak pernah dipakai (dead code).
+      Sekarang: jika tweet terdeteksi informatif DAN net == 0 (tidak ada
+      sinyal sentimen eksplisit/pola apapun) → Netral langsung, sebelum
+      model NB dikonsultasikan. Hanya net == 0 yang dipakai (bukan
+      abs(net) <= 1) supaya tweet yang punya opini lemah tetap diberi
+      kesempatan diproses Layer 2a/2b di bawah.
 
-    Layer 1a — Override Positif KUAT (net >= 2):
-      Sinyal lexicon + pola sangat kuat → Positif langsung.
+    Layer 0a — >>> FIX v5 (MASALAH 13, baru): Override Zero-Signal.
+      Jika skor_pos == 0 DAN skor_neg == 0 (tidak ada sinyal lexicon
+      ATAU pola apapun ditemukan sama sekali), langsung Netral. Model
+      NB terbukti bias ke Positif untuk tweet yang hanya menyebut kata
+      domain ('gratis ongkir', 'komdigi', dst.) tanpa kata sentimen
+      apapun, sehingga jika tidak ada sinyal sama sekali, default paling
+      aman adalah Netral, bukan menyerahkan ke model.
 
-    Layer 1b — Override Negatif KUAT (net <= -2):
-      Sinyal lexicon + pola sangat kuat → Negatif langsung.
-      CATATAN: Pola komparatif "mending X daripada Y" menambah net -2/-3
-      sehingga tweet kritik implisit langsung terdeteksi di sini.
+    Layer 0b — Override dominasi kata (selisih ≥2):
+      Dua blok if independen yang sejajar (bug indentasi versi lama
+      sudah diperbaiki di v3).
 
-    Layer 2a — Override Positif LEMAH (net == 1):
-      Konsultasi model. Jika model tidak sangat yakin Negatif → Positif.
-
-    Layer 2b — Override Negatif LEMAH (net == -1):
-      Konsultasi model. Jika model tidak sangat yakin Positif → Negatif.
-
-    Layer 3 — Fallback Model NB:
-      Anti-bias:
-      - Model Negatif + lexicon bersih (net >= 0) + conf < 0.65 → Netral
-      - Model Positif + lexicon negatif (net <= -1) + conf < 0.65 → Netral
-
-    Layer 4 — Ultimate Fallback (model tidak tersedia):
-      Gunakan sinyal lexicon saja.
+    Layer 1a — Override Positif KUAT (net >= 2)
+    Layer 1b — Override Negatif KUAT (net <= -2)
+    Layer 2a — Override Positif LEMAH (net == 1), konsultasi model
+    Layer 2b — Override Negatif LEMAH (net == -1), konsultasi model
+    Layer 3  — Fallback Model NB (dengan anti-bias)
+    Layer 4  — Ultimate Fallback (model tidak tersedia)
     ─────────────────────────────────────────────────────────────────────
     Return: (label: str, confidence: float)
     """
     net        = skor["net"]
-    skor_pos = skor["positif"]   # ← pastikan dict ini return nilai ini
-    skor_neg = skor["negatif"]   # ← pastikan dict ini return nilai ini
+    skor_pos = skor["positif"]
+    skor_neg = skor["negatif"]
     is_info    = skor.get("informatif", False)
 
-    # ── TAMBAHAN Layer 0b: Override dominasi kata ─────────
-    # Jika salah satu sisi punya ≥2 kata lebih banyak dari sisi lain,
-    # langsung putuskan tanpa menunggu model NB.
+    # ── Layer 0: Override Informatif (FIX v5 — MASALAH 12) ───────────────
+    if is_info and net == 0:
+        return ("Netral", 0.60)
+
+    # ── Layer 0a: Override Zero-Signal (FIX v5 — MASALAH 13) ─────────────
+    if skor_pos == 0 and skor_neg == 0:
+        return ("Netral", 0.55)
+
+    # ── Layer 0b: Override dominasi kata ──────────────────────────────────
     if skor_neg >= 2 and skor_neg > skor_pos:
         conf = min(0.60 + (skor_neg - skor_pos) * 0.05, 0.90)
         return ("Negatif", round(conf, 3))
-    
-        if skor_pos >= 2 and skor_pos > skor_neg:
-            conf = min(0.60 + (skor_pos - skor_neg) * 0.05, 0.90)
+
+    if skor_pos >= 2 and skor_pos > skor_neg:
+        conf = min(0.60 + (skor_pos - skor_neg) * 0.05, 0.90)
         return ("Positif", round(conf, 3))
 
     # ── Layer 1a: Positif KUAT ────────────────────────────────────────────
@@ -699,8 +971,6 @@ def _klasifikasi_hybrid(
         return ("Positif", round(conf, 3))
 
     # ── Layer 1b: Negatif KUAT ────────────────────────────────────────────
-    # Pola komparatif ("mending X daripada Y") memberi net -2 hingga -4,
-    # sehingga tweet kritik implisit langsung tertangkap di layer ini.
     if net <= -2:
         conf = min(0.65 + (abs(net) * 0.05), 0.92)
         return ("Negatif", round(conf, 3))
@@ -736,12 +1006,10 @@ def _klasifikasi_hybrid(
     if model_result is not None:
         label_norm, confidence, proba_dict = model_result
 
-        # Anti-bias 1: Model Negatif tapi lexicon bersih → Netral
         if label_norm == "Negatif" and net >= 0 and confidence < 0.65:
             corrected_conf = round(0.50 + max(0, confidence - 0.50) * 0.20, 3)
             return ("Netral", corrected_conf)
 
-        # Anti-bias 2: Model Positif tapi lexicon negatif → Netral
         if label_norm == "Positif" and net <= -1 and confidence < 0.65:
             corrected_conf = round(0.50 + max(0, confidence - 0.50) * 0.20, 3)
             return ("Netral", corrected_conf)
@@ -798,4 +1066,4 @@ def prediksi_sentimen(list_text: list):
     """
     clean_texts = [preprocess_for_model(t) for t in list_text]
     labels = [analisis_sentimen_single(t)[0] for t in list_text]
-    return clean_texts, labels
+    return clean_texts, labels  

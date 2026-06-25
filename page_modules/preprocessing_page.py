@@ -149,7 +149,7 @@ KATA_SENTIMEN_PENTING = {
     "rusak", "bohong", "tipu", "korupsi",
     # ── Negatif domain e-commerce / ongkir ────────────────
     "mahal", "lambat", "lelet", "ribet", "susah", "repot",
-    "rugi", "boros",
+    "rugi", "boros", "malah", "nyusahin", "susah-susahin",
     # ── Emosi ─────────────────────────────────────────────
     "marah", "sedih", "khawatir", "kecewa",
     # ── DITAMBAHKAN: Penanda pola kontekstual ─────────────
@@ -164,13 +164,18 @@ KATA_SENTIMEN_PENTING = {
     "ketimbang",  # variasi daripada
     "begini",     # "kebijakan begini" = kritik tersirat
     "gajelas",    # "gajelas aja kebijakan ini" = tidak jelas/negatif
+    "gk jelas",      # "gk jelas aja kebijakan ini" = tidak jelas/negatif
+    "mahal",      # "mahal banget kebijakan ini" = negatif
+    "tai",        # "kebijakan ini tai" = sangat buruk
+    "sok",        # "kebijakan ini sok keren" = negatif (sok = pura-pura)
     "nyusahin",  # "kebijakan ini nyusahin" = ribet/susah-susahin"
     "malas",      # "malas banget urus kebijakan ini" = negatif
+    "ga prioritas", "gak prioritas", "nggak prioritas",  # "kebijakan ini gak prioritas" = negatif
     
     # TAMBAHAN — kata emosi negatif
-'malas', 'males', 'enggan', 'bete', 'jengkel', 'depresi',
+'malas', 'males', 'enggan', 'bete', 'jengkel', 'depresi', 'tai', 'guoblok', 'goblok', 'goblog',
 'gondok', 'dongkol', 'sebal', 'bosan', 'jenuh', 'heran', 'bingung', 'pusing', 'stress', 'panik',
-'kapok', 'muak', 'frustrasi', 'menyesal', 'nyesel', 'mahal',
+'kapok', 'muak', 'frustrasi', 'menyesal', 'nyesel', 'mahal', 'sok', 'nyusahin', 'susah-susahin',
 }
 
 
@@ -182,6 +187,8 @@ KATA_SENTIMEN_PENTING = {
 # ───────────────────────────────────────────────────────────
 KATA_POLA_PENTING = {
     "mending",    # penanda pola komparatif negatif
+    "malah",    # penanda pola komparatif negatif
+    
     "mendingan",  # variasi mending
     "daripada",   # komponen "mending X daripada Y"
     "ketimbang",  # variasi daripada
@@ -189,8 +196,16 @@ KATA_POLA_PENTING = {
     "percuma",    # penanda sia-sia
     "begini",     # "kebijakan begini" = kritik tersirat
     "gajelas",    # "gajelas aja kebijakan ini" = tidak jelas/negatif
+    "malas",      # "malas banget urus kebijakan ini" = negatif
+    "gk jelas",      # "gk jelas aja kebijakan ini" = tidak jelas/negatif
     "mahal",      # "mahal banget kebijakan ini" = negatif
     "nyusahin",  # penanda ribet/susah-susahin
+    "sok",        # "kebijakan ini sok keren" = negatif (sok = pura-pura)
+    "ga prioritas", "gak prioritas", "nggak prioritas",  # "kebijakan ini gak prioritas" = negatif
+    "tai",        # "kebijakan ini tai" = sangat buruk
+    "gajelas",    # "gajelas aja kebijakan ini" = tidak jelas/negatif
+    "gk jelas",      # "gk jelas aja kebijakan ini" = tidak jelas/negatif
+    "mahal",      # "mahal banget kebijakan ini" = negatif
 }
 
 
@@ -262,6 +277,8 @@ def _load_normalization() -> dict:
         "komdigi":      "komdigi",
         "kemendag":     "kementerian perdagangan",
         "kominfo":      "kementerian komunikasi",
+        "gejeee":      "geje",
+        "gk jelas":      "tidak jelas",
         # E-commerce umum
         "ecommerce":    "e commerce",
         "marketplace":  "marketplace",

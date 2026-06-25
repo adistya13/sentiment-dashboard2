@@ -1,8 +1,17 @@
 """
 splash_page.py
 ──────────────
-Splash screen modern, full-viewport centered, tampil sekali per sesi.
-Menggunakan st.components.v1.html (iframe isolated).
+Splash screen modern, full-viewport centered.
+Hanya tampil SEKALI saat pertama kali sistem diakses (browser baru/tab baru).
+Jika halaman di-refresh (F5), splash TIDAK akan muncul lagi — karena status
+"sudah pernah splash" disimpan di URL query parameter, bukan di session_state.
+
+⚠️ KENAPA TIDAK PAKAI session_state SAJA?
+   session_state Streamlit terikat ke session koneksi, bukan ke browser/tab.
+   Pada beberapa kondisi (reconnect websocket, refresh di beberapa environment
+   hosting), session_state bisa ter-reset sehingga splash muncul lagi padahal
+   user hanya refresh. query_params (di URL) tidak hilang saat refresh biasa,
+   sehingga lebih andal untuk menandai "splash sudah pernah tampil".
 
 🕐 PENGATURAN DURASI:
    _SPLASH_DURATION = 10   ← ganti angka ini (satuan: detik)
@@ -16,13 +25,17 @@ import time
 import streamlit as st
 import streamlit.components.v1 as components
 
-_APP_NAME        = "SentiTrack"
+_APP_NAME = "SentiTrack"
 
 # ┌─────────────────────────────────────────┐
 # │  ⏱  GANTI ANGKA INI UNTUK UBAH DURASI  │
 # │     Satuan: detik  |  Rekomendasi: 4–8  │
 _SPLASH_DURATION = 10
 # └─────────────────────────────────────────┘
+
+# Nama parameter URL yang dipakai sebagai "penanda" splash sudah tampil.
+# Tidak perlu diubah, kecuali bentrok dengan query param lain di app kamu.
+_SPLASH_FLAG_KEY = "splashed"
 
 
 def _build_splash_html(duration: int) -> str:
@@ -46,7 +59,6 @@ body {{
   align-items: center;
   justify-content: center;
   min-height: 100vh;
-  /* background ditangani oleh .bg */
 }}
 
 /* ── Background gradient ── */
@@ -98,17 +110,8 @@ body {{
   border: 1.5px solid rgba(226,232,240,0.85);
   border-radius: 24px;
   padding: 2.5rem 2.75rem 2rem;
-
-  /*
-   * ──────────────────────────────────────────────────────
-   *  📐 LEBAR CARD
-   *  Ubah max-width untuk memperlebar / mempersempit card.
-   *  Rekomendasi: 460px – 580px
-   * ──────────────────────────────────────────────────────
-   */
   width: calc(100% - 2.5rem);
   max-width: 520px;
-
   box-shadow:
     0 0 0 1px rgba(255,255,255,0.5) inset,
     0 8px 40px rgba(59,130,246,0.09),
@@ -229,14 +232,6 @@ body {{
   height: 100%;
   background: linear-gradient(90deg, #3b6cf7, #6366f1, #818cf8);
   border-radius: 99px;
-
-  /*
-   * ──────────────────────────────────────────────────────
-   *  ⏱  PROGRESS BAR DURATION
-   *  Nilai ini otomatis mengikuti _SPLASH_DURATION di atas.
-   *  Tidak perlu diubah manual.
-   * ──────────────────────────────────────────────────────
-   */
   animation: progress {duration}s linear forwards;
   width: 0%;
 }}
@@ -322,7 +317,7 @@ body {{
       <div class="info-icon">📊</div>
       <div>
         <div class="info-text-label">Output</div>
-        <div class="info-text-value">Positif · Netral · Negatif</div>
+        <div class="info-text-value">Dashboard Analisis Sentimen</div>
       </div>
     </div>
   </div>
@@ -358,10 +353,26 @@ body {{
 
 def maybe_show_splash() -> bool:
     """
-    Tampilkan splash jika belum tampil di sesi ini.
-    Kembalikan True jika splash baru saja ditampilkan, False jika dilewati.
+    Tampilkan splash HANYA jika belum pernah tampil di browser ini.
+
+    Mekanisme:
+    - Saat splash ditampilkan untuk pertama kali, kita menambahkan
+      query parameter ?splashed=1 ke URL via st.query_params.
+    - Karena ini tersimpan di URL (bukan di session_state server),
+      query parameter ini TETAP ADA saat halaman di-refresh (F5).
+    - Jadi: refresh biasa -> splash TIDAK muncul lagi.
+            buka tab/browser baru tanpa parameter itu -> splash muncul.
+            klik tombol "reset splash" (lihat reset_splash()) -> splash
+            akan muncul lagi di reload berikutnya.
+
+    Return:
+        True  -> splash baru saja ditampilkan (halaman akan rerun setelahnya)
+        False -> splash dilewati (sudah pernah tampil sebelumnya)
     """
-    if st.session_state.get("splash_done", False):
+    # Cek apakah flag sudah ada di URL
+    already_splashed = st.query_params.get(_SPLASH_FLAG_KEY) == "1"
+
+    if already_splashed:
         return False
 
     # Sembunyikan semua elemen Streamlit selama splash
@@ -400,7 +411,23 @@ def maybe_show_splash() -> bool:
     # Tunggu sesuai durasi splash sebelum lanjut ke halaman utama
     time.sleep(_SPLASH_DURATION + 0.3)
 
-    st.session_state["splash_done"] = True
+    # Tandai di URL bahwa splash sudah pernah tampil.
+    # Penanda ini bertahan walau halaman di-refresh (F5).
+    st.query_params[_SPLASH_FLAG_KEY] = "1"
+
     st.rerun()
 
     return True
+
+
+def reset_splash():
+    """
+    Opsional: panggil fungsi ini (misalnya dari tombol di sidebar)
+    jika ingin memaksa splash muncul lagi di reload berikutnya.
+    Contoh penggunaan:
+        if st.sidebar.button("Tampilkan ulang splash"):
+            reset_splash()
+            st.rerun()
+    """
+    if _SPLASH_FLAG_KEY in st.query_params:
+        del st.query_params[_SPLASH_FLAG_KEY]

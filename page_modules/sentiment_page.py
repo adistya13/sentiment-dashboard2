@@ -601,7 +601,7 @@ def _render_tweet_table(fdf, filter_label):
     with tf3:
         sort_by = st.selectbox(
             "Urutkan",
-            ["Terbaru dulu", "Terlama dulu", "Keyakinan tertinggi"],
+            ["Terbaru dulu", "Terlama dulu"],
             key="sentiment_table_sort",
         )
 
@@ -620,10 +620,8 @@ def _render_tweet_table(fdf, filter_label):
 
     if sort_by == "Terbaru dulu":
         tdf = tdf.sort_values("created_at", ascending=False)
-    elif sort_by == "Terlama dulu":
-        tdf = tdf.sort_values("created_at", ascending=True)
     else:
-        tdf = tdf.sort_values("confidence", ascending=False)
+        tdf = tdf.sort_values("created_at", ascending=True)
 
     out = tdf[["created_at", "crawled_at", "text", "clean_text", "sentiment"]].copy()
     out["created_at"]  = out["created_at"].apply(format_dt)
