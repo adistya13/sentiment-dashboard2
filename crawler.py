@@ -12,6 +12,32 @@ NRT_INTERVAL_MINUTES = 5
 LOG_FILE   = "auto_crawl_log.json"
 STATE_FILE = "crawler_state.json"
 
+# ═══════════════════════════════════════════════════════════
+#  NRT ACTIVATION PERSISTENCE
+# ═══════════════════════════════════════════════════════════
+
+NRT_ACTIVATION_FILE = "nrt_activation.json"
+
+def save_nrt_activation(activated: bool):
+    """Simpan status aktivasi NRT ke file agar persist setelah refresh."""
+    try:
+        with open(NRT_ACTIVATION_FILE, "w") as f:
+            json.dump({"activated": activated, "updated_at": datetime.now(timezone.utc).isoformat()}, f)
+    except Exception as e:
+        print(f"[crawler] Gagal menyimpan NRT activation: {e}")
+
+
+def load_nrt_activation() -> bool:
+    """Baca status aktivasi NRT dari file."""
+    if not os.path.exists(NRT_ACTIVATION_FILE):
+        return False
+    try:
+        with open(NRT_ACTIVATION_FILE, "r") as f:
+            data = json.load(f)
+            return bool(data.get("activated", False))
+    except Exception:
+        return False
+
 # ── Lock agar tidak ada dua crawl berjalan bersamaan ──────────────
 _crawl_lock = threading.Lock()
 
@@ -95,31 +121,6 @@ def set_crawler_state(is_running=False, service_active=None):
     except Exception as e:
         print(f"[crawler] Gagal menulis state: {e}")
 
-# ═══════════════════════════════════════════════════════════
-#  NRT ACTIVATION PERSISTENCE
-# ═══════════════════════════════════════════════════════════
-
-NRT_ACTIVATION_FILE = "nrt_activation.json"
-
-def save_nrt_activation(activated: bool):
-    """Simpan status aktivasi NRT ke file agar persist setelah refresh."""
-    try:
-        with open(NRT_ACTIVATION_FILE, "w") as f:
-            json.dump({"activated": activated, "updated_at": datetime.now(timezone.utc).isoformat()}, f)
-    except Exception as e:
-        print(f"[crawler] Gagal menyimpan NRT activation: {e}")
-
-
-def load_nrt_activation() -> bool:
-    """Baca status aktivasi NRT dari file."""
-    if not os.path.exists(NRT_ACTIVATION_FILE):
-        return False
-    try:
-        with open(NRT_ACTIVATION_FILE, "r") as f:
-            data = json.load(f)
-            return bool(data.get("activated", False))
-    except Exception:
-        return False
     
 # ═══════════════════════════════════════════════════════════
 #  CORE JOB
