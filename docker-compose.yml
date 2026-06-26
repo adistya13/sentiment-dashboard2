@@ -3,16 +3,17 @@ version: '3.8'
 services:
   dashboard:
     build: .
-    container_name: ongkirscope-dashboard
+    container_name: sentimen-dashboard
+    env_file: .env
     restart: unless-stopped
     ports:
-      - "8502:8501" 
+      - "8502:8501"
     volumes:
-      - sentiment_data:/app/data
-    environment:
-      - APP_TIMEZONE=Asia/Jakarta
-      - DATABASE_PATH=/app/data/data_sentimen_komdigi.db
+      - ./data:/app/data
+    networks:
+      - laravel-network
 
-volumes:
-  sentiment_data:
-    name: ongkirscope_sentiment_data
+networks:
+  laravel-network:
+    external: true
+    name: bpbd_laravel-network

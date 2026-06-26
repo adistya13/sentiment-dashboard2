@@ -5,19 +5,9 @@ from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
 load_dotenv()
-
-DB_PATH = os.getenv("DB_PATH", "mysql+pymysql://root:@localhost:3306/sentiment_komdigi")
-
-# Daftarkan dialect pymysql agar SQLAlchemy bisa menggunakannya
 pymysql.install_as_MySQLdb()
-
-engine = create_engine(
-    DB_PATH,
-    echo=False,
-    pool_recycle=3600,       # Reconnect otomatis setiap 1 jam (cegah timeout)
-    pool_pre_ping=True,      # Cek koneksi sebelum pakai (penting untuk realtime)
-)
-
+DATABASE_URL = os.getenv("DB_PATH", "mysql+pymysql://root:kalijompo25@db-container-new:3306/db_sentimen")
+engine = create_engine(DATABASE_URL)
 
 def init_db():
     """Buat tabel tweets jika belum ada (kompatibel MySQL)."""
