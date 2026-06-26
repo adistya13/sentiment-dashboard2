@@ -30,7 +30,7 @@ _APP_NAME = "SentiTrack"
 # ┌─────────────────────────────────────────┐
 # │  ⏱  GANTI ANGKA INI UNTUK UBAH DURASI  │
 # │     Satuan: detik  |  Rekomendasi: 4–8  │
-_SPLASH_DURATION = 10
+_SPLASH_DURATION = 5
 # └─────────────────────────────────────────┘
 
 # Nama parameter URL yang dipakai sebagai "penanda" splash sudah tampil.

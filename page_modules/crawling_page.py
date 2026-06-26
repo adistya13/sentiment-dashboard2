@@ -1138,12 +1138,11 @@ def show():
     # Inisialisasi pertama kali sesi dimulai
     if "nrt_activated" not in st.session_state:
         was_activated = load_nrt_activation()
-        # Jika file persist bilang aktif tapi user sudah eksplisit nonaktifkan → ikut flag
         explicitly_off_init = st.session_state.get("nrt_explicitly_deactivated", False)
         if was_activated and not explicitly_off_init:
-            st.session_state.nrt_activated = True
-            from crawler import activate_nrt_scheduler as _activate
-            _activate()
+            st.session_state.nrt_activated = True            
+            from crawler import ensure_scheduler_running as _ensure_safe
+            _ensure_safe()
         else:
             st.session_state.nrt_activated = False
 
