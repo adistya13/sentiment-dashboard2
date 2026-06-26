@@ -29,10 +29,11 @@ except Exception:
 
 init_db()
 
-# ── Auto-start background crawler scheduler (disabled) ───────────────────
-# Scheduler NRT hanya boleh berjalan setelah user menekan tombol aktivasi
-# pada mode "Hari Ini" (captured) agar sesuai kebutuhan (NRT dimulai manual).
-
+try:
+    from crawler import ensure_scheduler_running
+    ensure_scheduler_running()
+except Exception as e:
+    print(f"[app.py] Gagal auto-start scheduler: {e}")
 
 st.set_page_config(
     page_title="Dashboard Sentimen Twitter",

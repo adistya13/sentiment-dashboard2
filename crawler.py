@@ -22,7 +22,7 @@ _scheduler_lock    = threading.Lock()
 # ── Flag aktivasi NRT — harus True sebelum scheduler boleh jalan ──
 # PENTING: Nilai awal selalu False. Tidak ada kode module-level
 # yang boleh mengubah ini menjadi True secara otomatis.
-_nrt_enabled     = False
+_nrt_enabled     = load_nrt_activation()
 _nrt_enable_lock = threading.Lock()
 
 # ── Event untuk menghentikan scheduler secara bersih ──────────────
