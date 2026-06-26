@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  dashboard:
+    build: .
+    container_name: ongkirscope-dashboard
+    restart: unless-stopped
+    ports:
+      - "8502:8501" 
+    volumes:
+      - sentiment_data:/app/data
+    environment:
+      - APP_TIMEZONE=Asia/Jakarta
+      - DATABASE_PATH=/app/data/data_sentimen_komdigi.db
+
+volumes:
+  sentiment_data:
+    name: ongkirscope_sentiment_data

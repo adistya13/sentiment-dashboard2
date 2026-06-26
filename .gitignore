@@ -25,3 +25,9 @@ crawler_state.json
 
 # Notebook/IPython
 .ipynb_checkpoints/
+
+*_old*.pkl
+*.db
+*.xlsx
+tweets-data/
+.env
