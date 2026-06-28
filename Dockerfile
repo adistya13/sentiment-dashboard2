@@ -1,27 +1,36 @@
 FROM python:3.9-slim
 
-
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
+# 1. Instalasi basic utilitas: curl, gnupg, dan Node.js 18
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
+    ca-certificates \
     && curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# 2. Instalasi requirements Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# 3. Gunakan tools Playwright untuk menginstal dependensi Chromium secara otomatis dan tepat sesuai versi OS
+RUN npx --yes playwright install-deps chromium
+
+# 4. Menyalin modul halaman dan file konfigurasi utama
 COPY page_modules/ ./page_modules/
 COPY app.py splash_page.py database.py timezone_utils.py ./
 COPY crawler.py scraper_worker.py run_scraper_loop.py sentiment_service.py ./
 COPY indonesian-normalisasi-slangword-complete.txt indonesian-stopwords-complete.txt ./
 COPY nrt_activation.json ./
 COPY model_naive_bayes.pkl tfidf_vectorizer.pkl ./
+
+# 5. Membuat folder tampungan data hasil scraping
+RUN mkdir -p /app/tweets-data && chmod 777 /app/tweets-data
 
 EXPOSE 8501
 

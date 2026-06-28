@@ -9,6 +9,9 @@ from scraper_worker import scrape_once
 AUTO_CRAWL_INTERVAL_HOURS = 0.083
 NRT_INTERVAL_MINUTES = 5
 
+#AUTO_CRAWL_INTERVAL_HOURS = 0.016
+#NRT_INTERVAL_MINUTES = 1
+
 LOG_FILE   = "auto_crawl_log.json"
 STATE_FILE = "crawler_state.json"
 

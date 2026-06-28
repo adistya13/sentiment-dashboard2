@@ -143,14 +143,28 @@ def scrape_tab(tab, effective_query, limit):
     ]
 
     print(f"[scraper] Scraping tab {tab}...")
+    print(f"[scraper] Perintah: {' '.join(command)}")
+    
     try:
+        # Eksekusi dengan menangkap output stdout dan stderr secara live
         result = subprocess.run(
-            command, capture_output=True, text=True, timeout=180, shell=True
+            command, capture_output=True, text=True, timeout=180
         )
     except subprocess.TimeoutExpired:
         raise RuntimeError(
             f"tweet-harvest tab {tab} timeout (180 detik) — mungkin tidak ada hasil atau jaringan bermasalah"
         )
+
+    # Cetak output mentah dari tweet-harvest agar terlihat di log docker
+    if result.stdout:
+        print("\n=== [TWEET-HARVEST STDOUT] ===")
+        print(result.stdout)
+        print("==============================\n")
+        
+    if result.stderr:
+        print("\n=== [TWEET-HARVEST STDERR] ===")
+        print(result.stderr)
+        print("==============================\n")
 
     if result.returncode != 0:
         error_msg = result.stderr if result.stderr else result.stdout

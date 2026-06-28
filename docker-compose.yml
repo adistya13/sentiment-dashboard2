@@ -10,6 +10,7 @@ services:
       - "8502:8501"
     volumes:
       - ./data:/app/data
+      - ./tweets-data:/app/tweets-data
     networks:
       - laravel-network
 
